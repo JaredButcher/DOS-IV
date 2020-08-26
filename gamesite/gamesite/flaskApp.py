@@ -1,4 +1,4 @@
-from dosiv import createApp
+from gamesite import createApp
 import flask
 
 app = createApp()

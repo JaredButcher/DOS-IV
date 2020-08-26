@@ -1,9 +1,9 @@
 from flask import Flask
 
-def createApp(config="dosiv.config.DevelopmentConfig"):
+def createApp(config="gamesite.config.DevelopmentConfig"):
     app = Flask(__name__)
     app.config.from_object(config)
-    app.config.from_envvar('DOSIV_CONFIG')
+    app.config.from_envvar('GAMESITE_CONFIG')
 
     from dosiv.model import db
     db.init_app(app)
