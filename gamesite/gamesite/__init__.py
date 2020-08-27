@@ -5,7 +5,7 @@ def createApp(config="gamesite.config.DevelopmentConfig"):
     app.config.from_object(config)
     app.config.from_envvar('GAMESITE_CONFIG')
 
-    from dosiv.model import db
+    from gamesite.model import db
     db.init_app(app)
 
     return app
