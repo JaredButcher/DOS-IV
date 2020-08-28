@@ -36,7 +36,7 @@ class GameServer(TaskProcess):
     def _close(self):
         '''Called CLOSE_POLL_RATE times per second, checks if the server has been told to stop and stops it
         '''
-        if self.stop.is_set():
+        if self.stopEvent.is_set():
             for game in self.games:
                 game.close()
             self.wsServerCoro.close()
@@ -53,9 +53,11 @@ class GameClient():
     def __init__(self, server, conn):
         self.server = server
         self.conn = conn
+        self.sessionId = 0
+        self.belongsTo = None
     
     async def recv(self):
-        while not self.server.stop.is_set():
+        while not self.server.stopEvent.is_set():
             try:
                 message = await self.conn.recv()
             except websockets.exceptions.ConnectionClosed:
@@ -68,6 +70,22 @@ class GameClient():
     def close(self):
         self.conn.close()
         self.server.clients.remove(self)
+        if self.belongsTo:
+            self.belongsTo.removePlayer(self)
+
+    def clientId(self):
+        '''Get the client's sesson id
+        Returns:
+            (int): session id, 0 if not known
+        '''
+        return self.sessionId
+
+    def setBelongsTo(self, group):
+        '''Sets the group that this player currently belongs to allow it to be notified if we disconnect
+        Args:
+            group (Lobby | Game | None): group this client currently belongs to
+        '''
+        self.belongsTo = group
 
 class Message():
     '''Universal form for messages, used to pack and unpack messages
@@ -82,7 +100,7 @@ class Message():
     def __init__(self, user, game, form, content):
         '''Create a new message
         Args:
-            user (int): user id (until users are implented session id)
+            user (int): session id of user
             game (int): game id to send to, 0 if no game
             form (string): type of message
             content (object): any message content

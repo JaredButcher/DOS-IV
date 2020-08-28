@@ -7,7 +7,7 @@ class TaskProcess(multiprocessing.Process):
     '''
     def __init__(self):
         super().__init__(target=self.processStart)
-        self.stop = multiprocessing.Event()
+        self.stopEvent = multiprocessing.Event()
         self.start()
 
     def processStart(self):
@@ -18,5 +18,5 @@ class TaskProcess(multiprocessing.Process):
     def stop(self):
         '''Stops the child process
         '''
-        self.stop.set()
+        self.stopEvent.set()
     

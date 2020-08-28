@@ -18,13 +18,55 @@ class Game(TaskProcess):
         self.netpipeParent, self.netpipeChild = multiprocessing.Pipe()
         self.tickrate = tickrate
         self.gameId = Game.gameIdCounter
+        self.players = {}
         Game.gameIdCounter += 1
         super().__init__()
 
     def processStart(self):
-        '''Called on child process, runs in loop
+        return GameChild(self.gameId, self.stopEvent, self.netpipeChild, self.tickrate).run()
+
+    def getId(self):
+        '''Get the unique id of this game
         '''
-        while not self.stop.is_set():
+        return self.gameId
+
+    def pollSendMessages(self):
+        '''See if the child process has any messages in the pipe to send over the network and send them
+        '''
+        while self.netpipeParent.poll():
+            message = self.netpipeParent.recv()
+            self.players[message.user].send(message)
+
+    def recvMessage(self, message):
+        '''Pass network message to child process
+        Args:
+            message (Message): received message to send to child process
+        '''
+        self.netpipeParent.send(message)
+
+    def addPlayer(self, player):
+        '''Add a player to the lobby and send them the lobby info
+        Args:
+            client (GameClient): player to add
+        '''
+        self.players[client.clientId] = player
+        player.setBelongsTo(self)
+
+    def removePlayer(self, player):
+        '''Removes player from game, called by player if their connection closes
+        '''
+        pass
+
+class GameChild():
+    def __init__(self, gameId, stopEvent, netPipe, tickrate):
+        self.gameId = gameId
+        self.stopEvent = stopEvent
+        self.netpipeChild = netPipe
+        self.tickrate = tickrate
+        self.currentTime = time.time()
+
+    def run(self):
+        while not self.stopEvent.is_set():
             #Receive new network messages
             messages = []
             while self.netpipeChild.poll():
@@ -41,11 +83,6 @@ class Game(TaskProcess):
             self.gameLoop(self.currentTime - pastTime)
         return 0
 
-    def getId(self):
-        '''Get the unique id of this game
-        '''
-        return self.gameId
-
     def gameLoop(self, deltatime):
         '''Override to create game loop, called in child process
         Args:
@@ -59,4 +96,14 @@ class Game(TaskProcess):
             messages ([Message]): list of messages received
         '''
         pass
-    
+
+    def processCommandMessage(self, message):
+        '''See if the incoming message is a control message and process it accordingly
+        Args:
+            message (message): incoming message
+        Returns:
+            (bool): was it a command message, if so then don't pass it on farther
+        '''
+        if message.form == "":
+            pass
+        return False
