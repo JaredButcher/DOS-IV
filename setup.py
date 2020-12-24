@@ -10,7 +10,7 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts':[
-            'gamesite = gamesite.flaskApp'
+            'gamesite = gamesite.flaskApp:run'
         ]
     },
     py_modules=['gamesite'],

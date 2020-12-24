@@ -2,27 +2,16 @@ import websockets
 import asyncio
 import multiprocessing
 import gamesite.gamebase.taskProcess as taskProcess
+import gamesite.gamebase.networkenums as netenums
 from gamesite.gamebase.message import Message
 import json
 import logging
 from typing import Optional
 import collections
-from enum import IntEnum
 
 CLOSE_SLEEP = .5
 ROUTER_SLEEP = .1
 logger = logging.getLogger('GameServer')
-
-class CHANNEL(IntEnum):
-    SERVER = 0
-    CLIENT = 1
-    GAME = 2
-
-class SERVER_HANDLERS(IntEnum):
-    NETWORK = 0
-
-class NETWORK_FORMS(IntEnum):
-    REGISTER = 0
 
 class GameServer(taskProcess.TaskProcess):
     '''Listens to socket requests, forwards them to respective games, and spawns games. Runs a socket server on a seperate process.
@@ -37,8 +26,8 @@ class GameServer(taskProcess.TaskProcess):
         self.unregClients = []
         self.games = {}
         self.handlers = {}
-        self.setHandler(CHANNEL.SERVER, SERVER_HANDLERS.NETWORK, self.networkHandler)
-        super().__init__(multiprocessing.Queue(), "GameServer")
+        self.setHandler(netenums.CHANNEL.SERVER, netenums.SERVER_HANDLERS.NETWORK, self.networkHandler)
+        super().__init__(multiprocessing.Queue(), name="GameServer")
 
     def run(self):
         self.eventLoop = asyncio.new_event_loop()
@@ -91,7 +80,7 @@ class GameServer(taskProcess.TaskProcess):
         
     def networkHandler(self, message):
         message = Message.parseMessage(message)
-        if message['form'] == NETWORK_FORMS.REGISTER.value:
+        if message['form'] == netenums.NETWORK_FORMS.REGISTER.value:
             #TODO Get session id
             client = None
             self.clients[id] = client
@@ -111,6 +100,9 @@ class GameClient():
         while not self.server.stopEvent.is_set():
             try:
                 message = Message.parseMessage(await self.conn.recv())
+            finally:
+                self.close()
+                return
             message['source'] = self.id
             if message['channel'] in (CHANNEL.GAME.value,):
                 self.server.put(str(message))

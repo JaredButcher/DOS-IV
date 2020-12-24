@@ -1,5 +1,5 @@
-flask
-flask_sqlalchemy
+Flask
+Flask_sqlalchemy
 Flask-Testing
 pytest
 websockets

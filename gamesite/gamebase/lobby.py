@@ -1,16 +1,20 @@
 import typing
-import gamesite.gamebase.network as network
+import gamesite.gamebase.networkenums as netenums
+import collections
 
-class Lobby():
+class Lobby:
     lobbyCount = 0
+    lobbies = []
 
-    def __init__(self, router: 'network.GameServer', password: typing.Optional[str] = ''):
-        self.players = []
+    def __init__(self, router: 'network.GameServer', name: str, password: typing.Optional[str] = ''):
+        self.players = {}
         self.password = password
         self.router = router
-        self.lobbyId = lobbyCount
-        lobbyCount =  (lobbyCount + 1) % 2**31
-        router.setHandler(network.CHANNEL.GAME, self.lobbyId, self.messageHandler)
+        self.name = name
+        self.lobbyId = Lobby.lobbyCount
+        lobbyCount =  (Lobby.lobbyCount + 1) % 2**31
+        Lobby.lobbies.append(self)
+        router.setHandler(netenums.CHANNEL.GAME, self.lobbyId, self.messageHandler)
 
     def messageHandler(self, message: 'network.Message'):
         '''Process messages addressed to the lobby
@@ -22,7 +26,7 @@ class Lobby():
             Add a player to the lobby and send them the lobby info, returns if password was correct
         '''
         if self.password == password:
-            self.players.append(playerId)
+            self.players[playerId] = LobbyPlayer(playerId)
             #TODO send lobby info to player
             return True
         else:
@@ -32,11 +36,17 @@ class Lobby():
         '''Only call from network.GameClient
             Removes player from game, called by player if their connection closes
         '''
-        if playerId in self.players: 
-            self.players.remove(playerId)
-            #TODO Send message?
+        self.players.pop(playerId)
+        #TODO Send message?
         if len(self.players) == 0: self.close()
 
     def close(self):
-        #TODO Send messages to remaining palyers?
-        self.router.removeHandler(network.CHANNEL.GAME, self.lobbyId)
+        for player in self.players:
+
+        self.router.removeHandler(netenums.CHANNEL.GAME, self.lobbyId)
+        if self in Lobby.lobbies: Lobby.lobbies.remove(self)
+
+class LobbyPlayer(collections.UserDict):
+    def __init__(self, sessionId: int):
+        self['sessionId'] = sessionId
+        self['name'] = "Player"

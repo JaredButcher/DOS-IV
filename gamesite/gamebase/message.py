@@ -1,5 +1,6 @@
 import collections
 import json
+import typing
 
 class Message(collections.UserDict):
     '''Universal form for messages, used to pack and unpack messages
@@ -10,7 +11,7 @@ class Message(collections.UserDict):
         '''
         return Message(**(json.loads(message)))
 
-    def __init__(self, src: int, des: int, channel: int, form: int, content: Optional[dict] = {}):
+    def __init__(self, src: int, des: int, channel: int, form: int, content: typing.Optional[dict] = {}):
         '''Create a new message
         Args:
             src (int): source
