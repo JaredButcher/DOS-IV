@@ -9,9 +9,12 @@ class Message(collections.UserDict):
     def parseMessage(message):
         '''Parse received json string into message object
         '''
-        return Message(**(json.loads(message)))
+        try:
+            return Message(data = json.loads(message))
+        except json.JSONDecodeError:
+            return None
 
-    def __init__(self, src: int, des: int, channel: int, form: int, content: typing.Optional[dict] = {}):
+    def __init__(self, src: int, des: int, channel: int, form: int, content: typing.Optional[dict] = {}, data: typing.Optional[dict] = None):
         '''Create a new message
         Args:
             src (int): source
@@ -20,7 +23,10 @@ class Message(collections.UserDict):
             form (int): type of message
             content (object): any message content
         '''
-        super().__init__({'src': src, 'des': des, 'channel': channel, 'form': form, 'content': content})
+        if data:
+            super().__init__(data)
+        else:
+            super().__init__({'src': src, 'des': des, 'channel': channel, 'form': form, 'content': content})
 
     def __str__(self):
         return json.dumps(self)
@@ -29,3 +35,6 @@ class Message(collections.UserDict):
         '''Packs message into sendable string
         '''
         return str(self)
+
+    def matches(self, channel: typing.Optional[str] = None, des: typing.Optional[str] = None, form: typing.Optional[str] = None) -> bool:
+        return (not channel or self['channel'] == channel) and (not des or self['des'] == des) and (not form or self['form'] == form)

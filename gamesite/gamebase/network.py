@@ -4,9 +4,10 @@ import multiprocessing
 import gamesite.gamebase.taskProcess as taskProcess
 import gamesite.gamebase.networkenums as netenums
 from gamesite.gamebase.message import Message
+from gamesite.gamebase.lobby import Lobby
 import json
 import logging
-from typing import Optional
+import typing
 import collections
 
 CLOSE_SLEEP = .5
@@ -22,11 +23,8 @@ class GameServer(taskProcess.TaskProcess):
             port (int): port to listen to
         '''
         self.port = port
-        self.clients = {}
-        self.unregClients = []
-        self.games = {}
-        self.handlers = {}
-        self.setHandler(netenums.CHANNEL.SERVER, netenums.SERVER_HANDLERS.NETWORK, self.networkHandler)
+        self.sessions = {}
+        self.lobbies = {}
         super().__init__(multiprocessing.Queue(), name="GameServer")
 
     def run(self):
@@ -40,35 +38,50 @@ class GameServer(taskProcess.TaskProcess):
             self.eventLoop.close()
 
     def removeClient(self, client):
-        client = self.clients.pop(client.id, None)
-        if client in self.unregClients: self.unregClients.remove(client)            
-
-    def setHandler(self, channel, id, handler):
-        channelHandler = self.handlers.get(channel, {})
-        channelHandler[id] = handler
-        self.handlers[channel] = channelHandler
-
-    def removeHandler(self, channel, id):
-        channelHandler = self.handlers.get(channel, {})
-        channelHandler.pop(id)
-        self.handlers[channel] = channelHandler
+        client = self.sessions.pop(client.id, None)
+        if client:
+            client.close()
 
     async def accept(self, conn, url):
         '''Ran asyncrnously on child process, called on incoming connections
         '''
-        client = GameClient(self, conn)
-        self.unregClients.append(client)
-        await client.recv()
+        try:
+            message = Message.parseMessage(await conn.recv())
+        except websockets.ConnectionClosedError:
+            await conn.close()
+            return
+        if message.matches(netenums.CHANNEL.SERVER.value, 0, netenums.NETWORK_FORMS.REGISTER):
+            sessionId = message['content']['sessionId']
+            if sessionId in self.sessions:
+                self.sessions[sessionId].setConn(conn)
+            else:
+                self.sessions[sessionId] = GameClient(sessionId, self)
+        else:
+            await conn.close()
 
     async def route(self):
         while not self.stopEvent.is_set():
             await asyncio.sleep(ROUTER_SLEEP)
             while not self.networkQueue.empty():
                 message = Message.parseMessage(self.networkQueue.get())
-                handler = self.handlers.get(message['channel'], {}).get(message['des'], None)
-                if handler: handler(message)
+                if message:
+                    if message.matches(netenums.CHANNEL.SERVER.value):
+                        self.networkHandler(message)
+                    elif message.matches(netenums.CHANNEL.LOBBY.value):
+                        lobby = self.LOBBY.get(message['des'], None)
+                        if lobby:
+                            lobby.handle(message)
+                    elif message.matches(netenums.CHANNEL.CLIENT.value):
+                        client = self.sessions.get(message['des'], None)
+                        if client:
+                            client.send(message)
+        await self.close()
+
+    async def close(self):
         for game in self.games:
             game.close()
+        for client in self.sessions.values:
+            client.close()
         self.wsServerCoro.close()
         async def finishClose(self):
             await self.wsServerCoro.wait_closed()
@@ -79,44 +92,59 @@ class GameServer(taskProcess.TaskProcess):
         self.networkQueue.put(message)
         
     def networkHandler(self, message):
-        message = Message.parseMessage(message)
-        if message['form'] == netenums.NETWORK_FORMS.REGISTER.value:
-            #TODO Get session id
-            client = None
-            self.clients[id] = client
-            self.unregClients.remove(client)
-            
-class GameClient():
-    '''A user's socket connection, used to send messages to user and await messages
+        pass
+
+    def addLobby(self, lobby: 'Lobby'):
+        self.lobbies[lobby.id] = lobby
+
+    def rmLobby(self, lobbyId: int):
+        self.lobbies.pop(lobbyId)
+
+class GameClient(collections.UserDict):
+    '''A user's session, will store its current socket
     '''
 
-    def __init__(self, server: 'gamesite.gamebase.network.GameServer', conn: 'websockets.client'):
+    def __init__(self, sessionId: int, server: 'GameServer'):
         self.server = server
-        self.conn = conn
-        self.sessionId = 0
+        self.conn = None
+        self.sessionId = sessionId
         self.lobby = None
     
+    def setConn(self, conn: 'websockets.WebSocketServerProtocol'):
+        self.close()
+        self.conn = conn
+        asyncio.run_coroutine_threadsafe(self.recv(), self.server.eventLoop)
+
     async def recv(self):
         while not self.server.stopEvent.is_set():
             try:
                 message = Message.parseMessage(await self.conn.recv())
-            finally:
+            except websockets.ConnectionClosedError:
                 self.close()
                 return
-            message['source'] = self.id
-            if message['channel'] in (CHANNEL.GAME.value,):
-                self.server.put(str(message))
+            #Ready it for routing
+            message['src'] = self.sessionId
+            if message.matches(channel=netenums.CHANNEL.GAME.value):
+                message['des'] = self.lobby.id
+            else:
+                message['des'] = 0
+            self.server.put(str(message))
 
     @property
     def id(self):
         return self.sessionId
     
-    def send(self, message):
-        asyncio.run_coroutine_threadsafe(self.conn.send(message), self.server.eventLoop)
+    def send(self, message: typing.Union[str, 'Message']):
+        if self.conn:
+            asyncio.run_coroutine_threadsafe(self.conn.send(message), self.server.eventLoop)
+
+    def setLobby(self, lobby: 'Lobby'):
+        self.lobby = lobby
             
     def close(self):
         if self.lobby:
             self.lobby.removePlayer(self.id)
-        self.server.removeClient(self)
-        asyncio.run_coroutine_threadsafe(self.conn.close(), self.server.eventLoop)
+        if self.conn:
+            asyncio.run_coroutine_threadsafe(self.conn.close(), self.server.eventLoop)
+            self.conn = None
     

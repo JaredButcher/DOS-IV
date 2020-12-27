@@ -3,7 +3,7 @@ from enum import IntEnum
 class CHANNEL(IntEnum):
     SERVER = 0
     CLIENT = 1
-    GAME = 2
+    LOBBY = 2
 
 class SERVER_HANDLERS(IntEnum):
     NETWORK = 0
