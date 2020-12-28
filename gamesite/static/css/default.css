@@ -1,0 +1,36 @@
+html,body{
+    height: 100%;
+    background-color: #dfe3f3;
+}
+h1{
+    font-size: 40px;
+    padding: 5px;
+}
+h2{
+    font-size: 30px;
+    padding: 4px;
+}
+h3{
+    font-size: 20px;
+    padding: 3px;
+}
+#header{
+    background-color: #003976;
+    width: 100%;
+    margin: 0px;
+}
+#header > *{
+    display: inline-block;
+    padding: 8px;
+    font-size: 20px;
+    color: white;
+}
+#header > *:hover{
+    background-color: #001d3b;
+}
+#content{
+    margin: 0px 100px 0px 100px;
+    text-align: center;
+    background-color: #cbd0e7;
+    min-height: 100%;
+}

@@ -2,11 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="description" content="some discription">
+    <meta name="description" content="Gamesite">
+    <link type="text/css" href="{{url_for('static', filename='css/reset.css')}}" rel="stylesheet"/>
+    <link type="text/css" href="{{url_for('static', filename='css/default.css')}}" rel="stylesheet"/>
     <title>{% block title %}{% endblock %}</title>
+    <script src="{{url_for('static', filename='js/main.js')}}" type="module"></script>
 </head>
 <body>
-    <div class="content">
+    <div id="header">
+        <div>Home</div>
+        {% block navbar %}{% endblock %}
+    </div>
+    <div id="content">
         {% block content %}{% endblock %}
     </div>
 </body>

@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "noImplicitThis": false,
+        "strict": true,
+        "target": "ESNext",
+        "lib": ["DOM", "ES2019"],
+        "sourceMap": false,
+        "skipLibCheck": true,
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": true,
+        "baseUrl": "static/ts/",
+        "outDir": "static/js/"
+    }
+}

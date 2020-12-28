@@ -6,14 +6,15 @@ with open('requirements.txt') as f:
 
 setup(
     name='gamesite',
-    description='gamesite server',
+    description='gamesite and gameserver',
     zip_safe=False,
     entry_points={
         'console_scripts':[
-            'gamesite = gamesite.flaskApp:run'
+            'gamesite = gamesite.flaskApp:run',
+            'gameserver = gameserver.run:run'
         ]
     },
-    py_modules=['gamesite'],
+    py_modules=['gamesite', 'gameserver'],
     ext_modules=[
         #Extension("cExtentionFeed", sources = ["cExtentionFeed.cpp"])
     ],
