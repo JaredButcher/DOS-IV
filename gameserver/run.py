@@ -3,7 +3,7 @@ from gameserver.logging import initLogging
 
 def run():
     initLogging(10)
-    server = GameServer(4247)
+    server = GameServer(4247, 'http://localhost:5000', "Jim", 4, 20)
     try:
         server.run()
     finally:

@@ -4,7 +4,22 @@
 
 <div class="subcontent">
     <h2>Server List</h2>
-    <div id="serverList"></div>
+    <div id="serverList">
+            <div>
+                <div>Name</div>
+                <div>Address</div>
+                <div>Players</div>
+                <div>Games</div>
+            </div>
+        {%for server in servers%}
+            <div>
+                <div>{{server.name}}</div>
+                <div>{{server.address}}:{{server.port}}</div>
+                <div>{{server.currentPlayers}}/{{server.maxPlayers}}</div>
+                <div>{{server.currentGames}}/{{server.maxGames}}</div>
+            </div>
+        {% endfor %}
+    </div>
 </div>
 
 {% endblock %}
