@@ -24,6 +24,7 @@ class Process(multiprocessing.Process):
         self.inQueue.put(message)
 
     def log(self, level: int, message: str):
+        #TODO: Fix log
         self.outQueue.put(Message({'C': Channels.SERVER.value, 'F': IPCForms.LOG.value, 'LEVEL': level, 'MSG': message}))
 
     def stop(self):

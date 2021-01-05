@@ -15,12 +15,13 @@ def checkDictFormat(original: dict, format: dict) -> bool:
 class ServerInfo:
     _servers = {}
 
-    def __init__(self, name: str, address: str, port: int, maxGames: int, maxPlayers: int, **kwargs):
+    def __init__(self, name: str, address: str, port: int, maxGames: int, maxPlayers: int, password: bool, **kwargs):
         self.name = name
         self.address = address
         self.port = port
         self.maxGames = maxGames
         self.maxPlayers = maxPlayers
+        self.password = password
         self.currentGames = 0
         self.currentPlayers = 0
         self.lastUpdate = time.time()
@@ -42,7 +43,7 @@ class ServerInfo:
 
     @staticmethod
     def createServerInfo(request: dict, address: str) -> typing.Optional[int]:
-        if checkDictFormat(request, {'name': str, 'port': int, 'maxGames': int, 'maxPlayers': int}):
+        if checkDictFormat(request, {'name': str, 'port': int, 'maxGames': int, 'maxPlayers': int, 'password': bool}):
             newServerInfo = ServerInfo(address=address, **request)
             return newServerInfo.id
 

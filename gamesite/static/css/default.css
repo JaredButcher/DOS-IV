@@ -40,7 +40,7 @@ h3{
     background-color:  #003976;
     color: white;
     font-size: 20px;
-    width: 650px;
+    width: 750px;
     margin: auto;
 }
 #serverList > div{
@@ -60,5 +60,8 @@ h3{
 }
 #serverList > div > div:nth-child(2){
     width: 200px;
+}
+#serverList > div:hover{
+    background-color: #00254d;
 }
 

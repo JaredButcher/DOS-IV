@@ -1,48 +1,40 @@
-import multiprocessing
-import websockets
-import asyncio
-import gameserver.serverenums as serverenums
-from gameserver.message import Message
-from gameserver.lobby import Lobby
-import logging
 import typing
-import random
+import websockets
+import multiprocessing
+import threading
+import time
+import asyncio
 import requests
-import json
 import functools
+import json
+import gameserver.logging as logging
+from gameserver.netobj import NetObj
+from gameserver.gameclient import GameClient
 
 CLOSE_SLEEP = .5
-ROUTER_SLEEP = .1
+ROUTER_SLEEP = .01
 UPDATE_DELAY = 25
 logger = logging.getLogger('GameServer')
 
-random.seed()
-
-class GameServer:
-    '''Listens to socket requests, forwards them to respective games, and spawns games. Runs a socket server on a seperate process.
-    '''
-    def __init__(self, port: int, serverAddress: str, name: str, maxGames: int, maxPlayers: int):
-        '''Create and start server
-        Args:
-            port (int): port to listen to
-        '''
-        self.port = port
+class GameServer(NetObj):
+    def __init__(self, port: int, serverAddress: str, name: str, maxGames: typing.Optional[int] = 4, maxPlayers: typing.Optional[int] = 12, password: typing.Optional[str] = ''):
+        super().__init__()
         self.serverAddress = serverAddress
         self.name = name
-        self.id = None
         self.maxGames = maxGames
         self.maxPlayers = maxPlayers
-        self.sessions = {}
-        self.lobbies = {}
-        self.registered = False
+        self.password = password
         self.running = True
-        self.inQueue = multiprocessing.Queue()
+        self._port = port
+        self._sessions = {}
+        self._games = {}
+        self._netQueueHandlerThread = threading.Thread(target=self.netQueueHandler, daemon=True)
+        NetObj.setup(0, multiprocessing.Queue())
 
-    def run(self):
-        logger.log(30, "Run")
+        logger.log(30, "Gameserver starting")
+        self._netQueueHandlerThread.start()
         self.eventLoop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.eventLoop)
-        self.eventLoop.create_task(self.routeLobbyMessages())
         self.eventLoop.create_task(self.registerServer())
         self.wsServerCoro = websockets.serve(self.accept, host='', port=self.port, loop=self.eventLoop)
         self.eventLoop.run_until_complete(self.wsServerCoro)
@@ -51,134 +43,102 @@ class GameServer:
         finally:
             self.eventLoop.close()
 
-    def createLobby(self, name: str, owner: str, password: typing.Optional[str] = '') -> 'Lobby':
-        while True:
-            id = random.getrandbits(32)
-            if id not in self.lobbies: break
-        lobby = self.lobbies[id] = Lobby(self, id, name, owner, password)
-        self.sessions[owner].setLobby(lobby, password)
-        return lobby
+    @property
+    def port(self):
+        return self.port
 
-    def closeLobby(self, lobbyId: int):
-        lobby = self.lobbies.pop(lobbyId, None)
-        if lobby:
-            lobby.stop()
+    @property
+    def playerCount(self):
+        return len([player for player in self.sessions if player.conn])
 
-    def handleLobbyMessage(self, message: 'Message'):
-        if message['F'] == serverenums.ServerForms.LOG.value and message.contains(('LEVEL', 'MSG')):
-            logger.log(message['LEVEL'], message['MSG'])
-
-    def handleClientMessage(self, message: 'Message'):
-        pass
-
-    async def routeLobbyMessages(self):
-        logger.log(30, "Route")
+    async def netQueueHandler(self):
+        logger.log(30, "Router started")
         while self.running:
-            await asyncio.sleep(ROUTER_SLEEP)
-            while not self.inQueue.empty():
-                message = self.inQueue.get()
-                if message['C'] == serverenums.Channels.SERVER.value:
-                    self.handleLobbyMessage(message)
-                elif message['C'] == serverenums.Channels.CLIENT.value or message['C'] == serverenums.Channels.CLIENT_GAME.value:
-                    if 'SID' in message and message['SID'] in self.sessions:
-                        self.sessions[message['SID']].outHandle(message)
-
-    async def accept(self, conn, url):
-        '''Called on incomming connections, waits for session id to be sent
-        '''
-        try:
-            message = Message.parseMessage(await conn.recv())
-        except websockets.ConnectionClosedError:
-            message = None
-        if message and message['C'] == serverenums.Channels.SERVER.value and 'SID' in message:
-            if message['SID'] not in self.sessions:
-                self.sessions[message['SID']] = GameClient(message['SID'], self)
-            self.sessions[message['SID']].setConn(conn)
-        else:
-            await conn.close()
-
-    def close(self):
-        self.running = False
-        for lobby in self.lobbies.values():
-            self.closeLobby(lobby.id)
-        for client in self.sessions.values():
-            client.close()
-        async def finishClose(self):
-            await self.wsServerCoro.wait_closed()
-            self.loop.stop()
-        self.eventLoop.create_task(finishClose(self))
+            time.sleep(ROUTER_SLEEP)
+            while not self.netQueue.empty():
+                message = self.netQueue.get()
+                if message['D'] == 0:
+                    #From game to The server
+                    message['D'] = self.id
+                    NetObj.handleClientRpc(message)
+                elif message['S'] == 0:
+                    #From gameclient, going to remote client
+                    player = self._sessions[message['D'], None]
+                    if player:
+                        message.pop('C')
+                        message.pop('S')
+                        message['D'] = 0
+                        player.send(message)
+                elif message['C'] == 0:
+                    #Directed to all clients of game
+                    players = self._games.get(message['S'], (None, []))[1]
+                    message.pop('C')
+                    message.pop('S')
+                    for player in players:
+                        player.send(message)
+                elif message['C'] in self._sessions:
+                    #Directed to single client of game
+                    player = self._sessions[message['C'], None]
+                    if player:
+                        message.pop('C')
+                        message.pop('S')
+                        player.send(message)
 
     async def registerServer(self):
         logger.log(30, "Register")
         while self.running:
             if self.id is None:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/register', json = 
-                {'name': self.name, 'port': self.port, 'maxGames': self.maxGames, 'maxPlayers': self.maxPlayers}))
-                res = await req
-                if res.status_code == 201:
-                    self.id = res.json()['id']
-                    logger.log(30, "Registered with server")
+                {'name': self.name, 'port': self.port, 'maxGames': self.maxGames, 'maxPlayers': self.maxPlayers, 'password': self.password != ''}))
+                try:
+                    res = await req
+                    if res.status_code == 201:
+                        self.id = res.json()['id']
+                        logger.log(20, "Registered with server")
+                except requests.exceptions.ConnectionError:
+                    logger.log(40, "Failed to connect to server for registration")
             else:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/{self.id}/update', json = 
-                {'currentGames': len(self.lobbies), 'currentPlayers': len(self.sessions)}))
-                res = await req
-                if res.status_code != 200:
-                    logger.log(30, "Lost connecton with main server")
-                    self.id = None
+                {'currentGames': len(self.lobbies), 'currentPlayers': self.playerCount}))
+                try:
+                    res = await req
+                    if res.status_code != 200:
+                        logger.log(40, "Lost connecton with main server")
+                        self.id = None
+                except requests.exceptions.ConnectionError:
+                    logger.log(30, "Failed to connect to server for update")
             await asyncio.sleep(UPDATE_DELAY)
 
-class GameClient:
-    '''A user's ws session
-    '''
-    def __init__(self, sessionId: str, server: 'GameServer'):
-        self.server = server
-        self.conn = None
-        self.username = "Default Name"
-        self.sessionId = sessionId
-        self.lobby = None
-    
-    def setConn(self, conn: 'websockets.WebSocketServerProtocol'):
-        self.close()
-        self.conn = conn
-        asyncio.run_coroutine_threadsafe(self.recv(), self.server.eventLoop)
-
-    async def recv(self):
-        while True:
-            try:
-                message = Message.parseMessage(await self.conn.recv())
-            except websockets.ConnectionClosedError:
-                self.close()
-                return
-            if message:
-                message['SID'] = self.sessionId
-                if message['C'] == serverenums.Channels.CLIENT.value:
-                    self.inHandle(message)
-                elif message['C'] == serverenums.Channels.SERVER.value:
-                    self.server.handleClientMessage(message)
-                elif message['C'] == serverenums.Channels.GAME.value or message['C'] == serverenums.Channels.LOBBY.value:
-                    if self.lobby:
-                        self.lobby.put(message)
-            
-    def inHandle(self, message: 'Message'):
-        if message['F'] == serverenums.InClientForms.SET_USERNAME.value and message.contains(('USERNAME',)):
-            self.username = message['USERNAME']
-
-    def outHandle(self, message: 'Message'):
-        if message['C'] == serverenums.Channels.CLIENT.value:
-            if message['F'] == serverenums.OutClientForms.LOBBY.value:
-                if message['ID'] == 0:
-                    self.lobby = None
-                else:
-                    self.lobby = message['ID']
-        self.send(message)
-    
-    def send(self, message: 'Message'):
-        if self.conn:
-            message.pop('C', None)
-            message.pop('SID', None)
-            asyncio.run_coroutine_threadsafe(self.conn.send(str(message)), self.server.eventLoop)
-            
     def close(self):
-        if self.conn:
-            asyncio.run_coroutine_threadsafe(self.conn.close(), self.server.eventLoop)
-            self.conn = None
+        logger.log(30, "Closing server")
+        self.running = False
+        for game in self._games.values():
+            game.close()
+        for client in self.sessions.values():
+            client.close()
+        async def finishClose(self):
+            await self.wsServerCoro.wait_closed()
+            self.loop.stop()
+        self.eventLoop.create_task(finishClose(self))
+        if self._netQueueHandlerThread and self._netQueueHandlerThread.isAlive():
+            self._netQueueHandlerThread.join()
+
+    async def accept(self, conn, url):
+        '''Called on incomming connections, waits for session id to be sent
+        '''
+        try:
+            message = json.loads(await conn.recv())
+        except (websockets.ConnectionClosedError, json.JSONDecodeError):
+            message = None
+        try:
+            if self.playerCount < self.maxPlayers:
+                if message['SID'] in self.sessions:
+                    self.sessions[message['SID']].setConn(conn)
+                    return
+                elif message['PASSWORD'] == self.password:
+                    self.sessions[message['SID']] = GameClient(message['SID'], self)
+                    self.sessions[message['SID']].setConn(conn)
+                    return
+        except KeyError:
+            pass
+        await conn.close()

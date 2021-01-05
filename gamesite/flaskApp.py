@@ -4,8 +4,7 @@ import flask
 import random
 import time
 
-
-
+random.seed()
 app = createApp()
 
 @app.route('/')
@@ -30,6 +29,13 @@ def serverUpdate(server_id):
 @app.route('/server/get', methods=['POST'])
 def serverGet(server_id):
     return flask.make_response(flask.jsonify({'sucess': True, 'servers': ServerInfo.getServers()})), 200
+
+@app.after_request
+def setGameSessionCookie(response):
+    if 'gamesession' not in flask.session:
+        flask.session['gamesession'] = random.getrandbits(64)
+        response.set_cookie('gamesession', str(flask.session['gamesession']))
+    return response
 
 def run():
     app.run()

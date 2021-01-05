@@ -2,6 +2,7 @@
     "compilerOptions": {
         "noImplicitThis": false,
         "strict": true,
+        "watch": true,
         "target": "ESNext",
         "lib": ["DOM", "ES2019"],
         "sourceMap": false,

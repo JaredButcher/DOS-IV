@@ -6,7 +6,6 @@
     <link type="text/css" href="{{url_for('static', filename='css/reset.css')}}" rel="stylesheet"/>
     <link type="text/css" href="{{url_for('static', filename='css/default.css')}}" rel="stylesheet"/>
     <title>{% block title %}{% endblock %}</title>
-    <script src="{{url_for('static', filename='js/main.js')}}" type="module"></script>
 </head>
 <body>
     <div id="header">
@@ -16,5 +15,6 @@
     <div id="content">
         {% block content %}{% endblock %}
     </div>
+    <script src="static/js/main.js" type="module"></script>
 </body>
 </html>
