@@ -7,7 +7,7 @@ import asyncio
 import requests
 import functools
 import json
-import gameserver.logging as logging
+import logging
 from gameserver.netobj import NetObj
 from gameserver.gameclient import GameClient
 
@@ -31,32 +31,35 @@ class GameServer(NetObj):
         self._netQueueHandlerThread = threading.Thread(target=self.netQueueHandler, daemon=True)
         NetObj.setup(0, multiprocessing.Queue())
 
+    @property
+    def port(self):
+        return self._port
+
+    @property
+    def playerCount(self):
+        return len([player for player in self._sessions if player.conn])
+
+    def start(self):
         logger.log(30, "Gameserver starting")
         self._netQueueHandlerThread.start()
         self.eventLoop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.eventLoop)
         self.eventLoop.create_task(self.registerServer())
-        self.wsServerCoro = websockets.serve(self.accept, host='', port=self.port, loop=self.eventLoop)
-        self.eventLoop.run_until_complete(self.wsServerCoro)
+        self.wsServerCoro = websockets.serve(self.accept, host='', port=self.port)
+        self.thing = self.eventLoop.run_until_complete(self.wsServerCoro)
         try:
             self.eventLoop.run_forever()
+        except KeyboardInterrupt:
+            pass
         finally:
-            self.eventLoop.close()
+            self.close()
 
-    @property
-    def port(self):
-        return self.port
-
-    @property
-    def playerCount(self):
-        return len([player for player in self.sessions if player.conn])
-
-    async def netQueueHandler(self):
-        logger.log(30, "Router started")
+    def netQueueHandler(self):
+        logger.log(30, "Router loop starting")
         while self.running:
             time.sleep(ROUTER_SLEEP)
-            while not self.netQueue.empty():
-                message = self.netQueue.get()
+            while not NetObj.serverQueue.empty():
+                message = NetObj.serverQueue.get()
                 if message['D'] == 0:
                     #From game to The server
                     message['D'] = self.id
@@ -85,7 +88,7 @@ class GameServer(NetObj):
                         player.send(message)
 
     async def registerServer(self):
-        logger.log(30, "Register")
+        logger.log(30, "Register loop starting")
         while self.running:
             if self.id is None:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/register', json = 
@@ -99,7 +102,7 @@ class GameServer(NetObj):
                     logger.log(40, "Failed to connect to server for registration")
             else:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/{self.id}/update', json = 
-                {'currentGames': len(self.lobbies), 'currentPlayers': self.playerCount}))
+                {'currentGames': len(self._games), 'currentPlayers': self.playerCount}))
                 try:
                     res = await req
                     if res.status_code != 200:
@@ -114,12 +117,12 @@ class GameServer(NetObj):
         self.running = False
         for game in self._games.values():
             game.close()
-        for client in self.sessions.values():
+        for client in self._sessions.values():
             client.close()
         async def finishClose(self):
-            await self.wsServerCoro.wait_closed()
-            self.loop.stop()
-        self.eventLoop.create_task(finishClose(self))
+            await self.thing.wait_closed()
+        self.thing.close()
+        self.eventLoop.run_until_complete(finishClose(self))
         if self._netQueueHandlerThread and self._netQueueHandlerThread.isAlive():
             self._netQueueHandlerThread.join()
 
@@ -132,12 +135,12 @@ class GameServer(NetObj):
             message = None
         try:
             if self.playerCount < self.maxPlayers:
-                if message['SID'] in self.sessions:
-                    self.sessions[message['SID']].setConn(conn)
+                if message['SID'] in self._sessions.keys():
+                    self._sessions[message['SID']].setConn(conn)
                     return
                 elif message['PASSWORD'] == self.password:
-                    self.sessions[message['SID']] = GameClient(message['SID'], self)
-                    self.sessions[message['SID']].setConn(conn)
+                    self._sessions[message['SID']] = GameClient(message['SID'], self)
+                    self._sessions[message['SID']].setConn(conn)
                     return
         except KeyError:
             pass

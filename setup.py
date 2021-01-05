@@ -11,7 +11,7 @@ setup(
     entry_points={
         'console_scripts':[
             'gamesite = gamesite.flaskApp:run',
-            'gameserver = gameserver.run:run'
+            'gameserver = gameserver.main:main'
         ]
     },
     py_modules=['gamesite', 'gameserver'],
