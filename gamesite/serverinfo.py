@@ -15,15 +15,14 @@ def checkDictFormat(original: dict, format: dict) -> bool:
 class ServerInfo:
     _servers = {}
 
-    def __init__(self, name: str, address: str, port: int, maxGames: int, maxPlayers: int, password: bool, **kwargs):
+    def __init__(self, name: str, address: str, port: int, maxPlayers: int, currentPlayers: int, game: str, password: bool, **kwargs):
         self.name = name
         self.address = address
         self.port = port
-        self.maxGames = maxGames
         self.maxPlayers = maxPlayers
         self.password = password
-        self.currentGames = 0
-        self.currentPlayers = 0
+        self.currentPlayers = currentPlayers
+        self.game = game
         self.lastUpdate = time.time()
         while True:
             self.id = random.getrandbits(32)
@@ -33,17 +32,18 @@ class ServerInfo:
     @staticmethod
     def updateServer(id: int, update: dict, address: str) -> bool:
         server = ServerInfo._servers.get(id, None)
-        if server and server.address == address and checkDictFormat(update, {'currentGames': int, 'currentPlayers': int}):
+        if server and server.address == address and checkDictFormat(update, {'currentPlayers': int, 'maxPlayers': int, 'game': str}):
             server.lastUpdate = time.time()
-            server.currentGames = update['currentGames']
+            server.maxPlayers = update['maxPlayers']
             server.currentPlayers = update['currentPlayers']
+            server.game = update['game']
             return True
         else:
             return False
 
     @staticmethod
     def createServerInfo(request: dict, address: str) -> typing.Optional[int]:
-        if checkDictFormat(request, {'name': str, 'port': int, 'maxGames': int, 'maxPlayers': int, 'password': bool}):
+        if checkDictFormat(request, {'name': str, 'port': int, 'maxPlayers': int, 'password': bool, 'currentPlayers': int, 'game': str}):
             newServerInfo = ServerInfo(address=address, **request)
             return newServerInfo.id
 

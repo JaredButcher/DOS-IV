@@ -1,53 +1,47 @@
 import typing
 import websockets
-import multiprocessing
-import threading
-import time
 import asyncio
 import requests
 import functools
 import json
 import logging
-from gameserver.netobj import NetObj, TARGET
+import multiprocessing
+from gameserver.logging import initLogging
+from gameserver.netobj import NetObj
 from gameserver.gameclient import GameClient
+from gameserver.gamebase import GameBase
 
 CLOSE_SLEEP = .5
 ROUTER_SLEEP = .01
-UPDATE_DELAY = 1
+UPDATE_DELAY = 25
 logger = logging.getLogger('GameServer')
 
-class GameServer:
-    def __init__(self, port: int, serverAddress: str, name: str, maxGames: typing.Optional[int] = 4, maxPlayers: typing.Optional[int] = 12, password: typing.Optional[str] = ''):
-        super().__init__()
+class GameServer(multiprocessing.Process):
+    def __init__(self, port: int, serverAddress: str, name: str, password: typing.Optional[str] = '', logLevel: typing.Optional[int] = 20, logFile: typing.Optional[str] = '', **kwargs):
+        super().__init__(name=name, daemon=True, **kwargs)
         self.serverAddress = serverAddress
         self.name = name
-        self.maxGames = maxGames
-        self.maxPlayers = maxPlayers
         self.password = password
         self.running = True
-        self.netQueue = multiprocessing.Queue()
         self.id = None
+        self.logLevel = logLevel
+        self.logFile = logFile
+        self.closeEvent = multiprocessing.Event()
+        self.isChildProcess = False
         self._port = port
         self._sessions = {}
-        self._games = {}
-        self._netQueueHandlerThread = threading.Thread(target=self.netQueueHandler, daemon=True)
+        self._game = None
+        self._wsServer = None
+        self.start()
 
-    @property
-    def port(self):
-        return self._port
-
-    @property
-    def playerCount(self):
-        return len([player for player in self._sessions.values() if player.connected])
-
-    def start(self):
+    def run(self):
+        initLogging(self.logLevel, self.logFile)
         logger.log(30, "Gameserver starting")
-        self._netQueueHandlerThread.start()
+        self.isChildProcess = True
         self.eventLoop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.eventLoop)
         self.eventLoop.create_task(self.registerServer())
-        self.wsServerCoro = websockets.serve(self.accept, host='', port=self.port)
-        self.thing = self.eventLoop.run_until_complete(self.wsServerCoro)
+        self._wsServer = self.eventLoop.run_until_complete(websockets.serve(self.accept, host='', port=self.port))
         try:
             self.eventLoop.run_forever()
         except KeyboardInterrupt:
@@ -55,23 +49,23 @@ class GameServer:
         finally:
             self.close()
 
-    def netQueueHandler(self):
-        logger.log(20, "Router loop starting")
-        while self.running:
-            time.sleep(ROUTER_SLEEP)
-            while not self.netQueue.empty():
-                message = self.netQueue.get()
-                if message[0] == TARGET.SERVER:
-                    self.handleMessage(message[1], message[2])
-                elif message[0] == TARGET.CLIENT:
-                    player = self._sessions[message[3], None]
-                    if player:
-                        player.send(message[2])
-                elif message[0] == TARGET.ALL_CLIENTS:
-                    game = self._games.get(message[1], None)
-                    if game:
-                        for player in game.players:
-                            player.send(message[2])
+    @property
+    def port(self):
+        return self._port
+
+    @property
+    def playerCount(self):
+        if self._game:
+            return self._game.playerCount
+        else:
+            return len([player for player in self._sessions.values() if player.connected])
+
+    @property
+    def maxPlayers(self):
+        if self._game:
+            return self._game.maxPlayers
+        else:
+            return 1
 
     def handleMessage(self, source: int, message: dict):
         pass
@@ -81,7 +75,7 @@ class GameServer:
         while self.running:
             if self.id is None:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/register', json = 
-                {'name': self.name, 'port': self.port, 'maxGames': self.maxGames, 'maxPlayers': self.maxPlayers, 'password': self.password != ''}, timeout=.3))
+                {'name': self.name, 'port': self.port, 'maxPlayers': self.maxPlayers, 'password': self.password != '', 'currentPlayers': self.playerCount, 'game': self._game.gameName if self._game else 'None'}, timeout=.3))
                 try:
                     res = await req
                     if res.status_code == 201:
@@ -91,7 +85,7 @@ class GameServer:
                     logger.log(40, "Failed to connect to server for registration")
             else:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/{self.id}/update', json = 
-                {'currentGames': len(self._games), 'currentPlayers': self.playerCount}, timeout=.3))
+                {'currentPlayers': self.playerCount, 'maxPlayers': self.maxPlayers, 'game': self._game.gameName if self._game else 'None'}, timeout=.3))
                 try:
                     res = await req
                     if res.status_code != 200:
@@ -100,35 +94,41 @@ class GameServer:
                 except requests.exceptions.ConnectionError:
                     logger.log(30, "Failed to connect to server for update")
             await asyncio.sleep(UPDATE_DELAY)
+            if self.closeEvent.is_set():
+                self.running = False
 
     def close(self):
-        logger.log(20, "Closing server")
-        self.running = False
-        for game in self._games.values():
-            game.close()
-        for client in self._sessions.values():
-            client.close()
-        self.thing.close()
-        if self._netQueueHandlerThread and self._netQueueHandlerThread.isAlive():
-            self._netQueueHandlerThread.join()
+        if self.isChildProcess:
+            logger.log(20, "Closing server")
+            self.running = False
+            if self._wsServer: self._wsServer.close()
+            if self._game: self._game.close()
+            for client in self._sessions.values():
+                client.close()
+        else:
+            self.closeEvent.set()
 
     async def accept(self, conn, url):
         '''Called on incomming connections, waits for session id to be sent
         '''
         logger.log(20, f'Received new connection')
+        if not self.running: return
         try:
             message = json.loads(await conn.recv())
         except (websockets.ConnectionClosedError, json.JSONDecodeError):
-            message = None
-        if message and self.playerCount < self.maxPlayers:
-            try:
-                if message['SID'] in self._sessions.keys():
-                    self._sessions[message['SID']].setConn(conn)
-                    return
-                elif message['PASSWORD'] == self.password:
-                    self._sessions[message['SID']] = GameClient(message['SID'])
-                    self._sessions[message['SID']].setConn(conn)
-                    return
-            except KeyError:
-                pass
-        await conn.close()
+            return
+        if not self.running and message and self.playerCount < self.maxPlayers: return
+        try:
+            if message['SID'] in self._sessions.keys():
+                self._sessions[message['SID']].setConn(conn)
+            elif message['PASSWORD'] == self.password:
+                self._sessions[message['SID']] = GameClient(message['SID'])
+                self._sessions[message['SID']].setConn(conn)
+            else:
+                return
+        except KeyError:
+            return
+        if self._game:
+            if not self._game.tryAddPlayer(self._sessions[message['SID']]):
+                self._sessions[message['SID']].close()
+

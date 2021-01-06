@@ -1,11 +1,16 @@
+import logging
 from gamesite import createApp
 from gamesite.serverinfo import ServerInfo
+from gameserver.gameserver import GameServer
+import multiprocessing
+import functools
 import flask
 import random
 import time
 
 random.seed()
 app = createApp()
+logger = logging.getLogger("Main")
 
 @app.route('/')
 def home():
@@ -38,7 +43,20 @@ def setGameSessionCookie(response):
     return response
 
 def run():
-    app.run()
+    servers = []
+    for i in range(3):
+        servers.append(GameServer(4245 + i, 'http://localhost:5000', f'Default Server {i}'))
+    try:
+        app.run(debug=False)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        logger.log(20, "Closing servers, may take a minute")
+        for server in servers:
+            server.close()
+        for server in servers:
+            server.join(30)
+
 
 if __name__ == '__main__':
     run()

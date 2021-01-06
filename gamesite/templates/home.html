@@ -13,16 +13,16 @@
                 <div>
                     <div>Name</div>
                     <div>Address</div>
+                    <div>Game</div>
                     <div>Players</div>
-                    <div>Games</div>
                     <div>Password</div>
                 </div>
             {%for server in servers%}
                 <div>
                     <div>{{server.name}}</div>
                     <div>{{server.address}}:{{server.port}}</div>
+                    <div>{{server.game}}</div>
                     <div>{{server.currentPlayers}}/{{server.maxPlayers}}</div>
-                    <div>{{server.currentGames}}/{{server.maxGames}}</div>
                     <div>{{server.password}}</div>
                 </div>
             {% endfor %}

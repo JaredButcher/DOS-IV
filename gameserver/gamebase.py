@@ -1,53 +1,61 @@
-import multiprocessing
-import threading
+from gameserver.gameclient import GameClient
+from gameserver.netobj import NetObj
 import time
-import typing
-from gameserver.netobj import NetObj, TARGET
-
-ROUTER_SLEEP = .01
+import asyncio
 
 class GameBase(NetObj):
-    def __init__(self, serverId: int, serverQueue: 'multiprocessing.Queue', gameQueue: 'multiprocessing.Queue', owner: int, password: typing.Optional(str) = ''):
+    def __init__(self, owner: 'GameClient'):
         super().__init__()
-        self.serverId = serverId
-        self.serverQueue = serverQueue
-        self.gameQueue = gameQueue
-        self.running = True
-        self.gameLoopRunning = False
-        self.tickRate = 20
+        self.gameName = "None"
         self.owner = owner
-        self.password = password
-        self.players = {}
-        NetObj.setup(self.send)
-        self.routerLoop()
+        self.maxPlayers = 1
+        self.tickrate = 20
+        self.running = False
+        self._players = {}
 
-    def routerLoop(self):
+        NetObj.clients = self._players
+        self.tryAddPlayer(self.owner)
+
+    @property
+    def playerCount(self):
+        return len(self.players)
+
+    def startGame(self):
+        self.running = True
+        asyncio.get_event_loop().create_task(self.startGameLoop())
+
+    async def startGameLoop(self):
+        lastTime = time.time()
         while self.running:
-            time.sleep(ROUTER_SLEEP)
-            while not self.gameQueue.empty():
-                message = self.gameQueue.get()
-                if message['D'] == 0:
-                    message['D'] = self.id
-                NetObj.handleClientRpc(message)
-        
+            if time.time() - lastTime < 1 / self.tickrate:
+                asyncio.sleep(time.time() - lastTime)
+            currentTime = time.time()
+            self.gameLoop(currentTime - lastTime)
+            lastTime = currentTime
+
     def gameLoop(self, deltatime: float):
         pass
 
-    def startGameLoop(self):
-        def run():
-            lastTime = time.time()
-            while self.running and self.gameLoopRunning:
-                delay = 1 / self.tickRate - (time.time() - lastTime)
-                if delay > 0: time.sleep(delay)
-                beginTime = time.time()
-                self.gameLoop(lastTime - beginTime)
-                lastTime = beginTime
-        self.gameLoopRunning = True
-        self._gameQueueHandleThread = threading.Thread(target=run, daemon=True)
-        self._gameQueueHandleThread.start()
+    def close(self):
+        self.running = False
+        NetObj.clients = {}
+        for player in self._players.values():
+            player.send({'D': 0, 'P': 'gameclose', 'A': [], 'K': {}})
 
-    def stopGameLoop(self):
-        self.gameLoopRunning = False
-        
-    def send(self, target: 'TARGET', message: dict, client: typing.Optional[int] = 0):
-        self.serverQueue.put((self.serverId, target, message, client))
+    def tryAddPlayer(self, client: 'GameClient') -> bool:
+        if len(self._players) < self.maxPlayers:
+            self._players[client.id] = client
+            self.playerConnected(client)
+            return True
+        return False
+
+    def removePlayer(self, client: 'GameClient'):
+        client.send({'D': 0, 'P': 'gameleave', 'A': [], 'K': {}})
+        self._players.pop(client.id, None)
+
+    def playerConnected(self, client: 'GameClient'):
+        NetObj.sendAllState(client.id)
+
+    def playerDisconnected(self, client: 'GameClient'):
+        pass
+

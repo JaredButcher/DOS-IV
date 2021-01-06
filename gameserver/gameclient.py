@@ -9,12 +9,11 @@ class GameClient:
     def __init__(self, sessionId):
         super().__init__()
         self.conn = None
-        self.username = "Default Name"
-        self.game = None
         self.sessionId = sessionId
         self._conn = None
         self._id = GameClient.clientCount
         GameClient.clientCount += 1
+        self.username = f'Default {self.id}'
         self.eventLoop = asyncio.get_event_loop()
 
     @property
@@ -35,24 +34,32 @@ class GameClient:
         self._conn = conn
         asyncio.run_coroutine_threadsafe(self.recv(), self.eventLoop)
         self.send({'D': 0, 'P': 'connected', 'A': [], 'K': {}})
+
     
     def send(self, message: dict):
         if self._conn:
             asyncio.run_coroutine_threadsafe(self._conn.send(json.dumps(message)), self.eventLoop)
 
     async def recv(self):
-        while self._conn and self._conn.open:
+        conn = self._conn
+        while conn and conn.open:
             try:
-                message = json.loads(await self._conn.recv())
+                message = json.loads(await conn.recv())
             except (websockets.ConnectionClosedError, json.JSONDecodeError):
-                self.close()
+                await conn.close()
+                if conn == self._conn:
+                    self._conn = None
                 return
             if message:
                 message['S'] = self.id
                 if message['D'] == 0:
                     self.handleMessage(message)
-                elif self.game:
-                    self.game.send(message)
+                else:
+                    try:
+                        NetObj.handleClientRpc(message)
+                    except KeyError:
+                        await conn.send(json.dumps({'D': 0, 'P': 'disconnected', 'A': ['Malformed message'], 'K': {}}))
+                        self.close()
 
     def handleMessage(self, message: dict):
         pass
