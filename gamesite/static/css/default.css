@@ -36,32 +36,32 @@ h3{
     background-color: #cbd0e7;
     flex-grow: 1;
 }
-#serverList{
+.joinList{
     background-color:  #003976;
     color: white;
     font-size: 20px;
     width: 750px;
     margin: auto;
 }
-#serverList > div{
+.joinList > div{
     border: 1px solid black;
 }
-#serverList > div:first-child{
+.joinList > div:first-child{
     border: none;
 }
-#serverList > div > div{
+.joinList > div > div{
     display: inline-block;
     text-align: left;
     width: 75px;
     padding: 2px;
 }
-#serverList > div > div:nth-child(1){
+.joinList > div > div:nth-child(1){
     width: 250px;
 }
-#serverList > div > div:nth-child(2){
+.joinList > div > div:nth-child(2){
     width: 200px;
 }
-#serverList > div:hover{
+.joinList > div:hover{
     background-color: #00254d;
 }
 

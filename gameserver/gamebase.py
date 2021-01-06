@@ -2,7 +2,7 @@ import multiprocessing
 import threading
 import time
 import typing
-from gameserver.netobj import NetObj
+from gameserver.netobj import NetObj, TARGET
 
 ROUTER_SLEEP = .01
 
@@ -18,7 +18,10 @@ class GameBase(NetObj):
         self.owner = owner
         self.password = password
         self.players = {}
-        NetObj.setup(self.serverId, self.serverQueue)
+        NetObj.setup(self.send)
+        self.routerLoop()
+
+    def routerLoop(self):
         while self.running:
             time.sleep(ROUTER_SLEEP)
             while not self.gameQueue.empty():
@@ -27,7 +30,6 @@ class GameBase(NetObj):
                     message['D'] = self.id
                 NetObj.handleClientRpc(message)
         
-
     def gameLoop(self, deltatime: float):
         pass
 
@@ -47,6 +49,5 @@ class GameBase(NetObj):
     def stopGameLoop(self):
         self.gameLoopRunning = False
         
-            
-
-
+    def send(self, target: 'TARGET', message: dict, client: typing.Optional[int] = 0):
+        self.serverQueue.put((self.serverId, target, message, client))

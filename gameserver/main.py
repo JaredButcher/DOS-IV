@@ -13,7 +13,7 @@ def main(argv=None):
     parser.add_argument("password", nargs='?', type=str, default='', help="Server password")
     args = parser.parse_args(argv if argv else sys.argv[1:])
 
-    initLogging(10)
+    initLogging(20)
     server = GameServer(args.port, args.webserver, args.name, args.maxGames, args.maxPlayers, args.password)
     server.start()
 

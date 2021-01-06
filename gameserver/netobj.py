@@ -1,19 +1,22 @@
 import typing
 import threading
-import multiprocessing
+import enum
+
+class TARGET(enum.IntEnum):
+    SERVER: 0
+    CLIENT: 1
+    ALL_CLIENTS: 2
 
 class NetObj:
     idCounter = 1
     netObjLock = threading.Lock()
     netObjs = {}
     clientRpcs = {}
-    serverId = 0
-    serverQueue = None
+    sendMethod = None
 
     @staticmethod
-    def setup(serverid: int, serverQueue: 'multiprocessing.Queue'):
-        NetObj.serverId = serverid
-        NetObj.serverQueue = serverQueue
+    def setup(sendMethod: typing.Callable[['TARGET', dict, typing.Optional[int]], None]):
+        NetObj.sendMethod = sendMethod
 
     @staticmethod
     def clientRpc(cls: str):
@@ -29,20 +32,29 @@ class NetObj:
         return inner
 
     @staticmethod
-    def serverAllRpc(funct):
+    def gameAllRpc(funct):
         '''Remote procedure call from server to all clients
         '''
         def inner(self, *args, **kwargs):
-            NetObj.serverQueue.put({'S': NetObj.serverId, 'C': 0, 'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs})
+            NetObj.sendMethod(TARGET.ALL_CLIENTS, {'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs})
             funct(self, *args, **kwargs)
         return inner
 
     @staticmethod
-    def serverSelectRpc(funct):
+    def gameSelectRpc(funct):
         '''Remote procedure call from server to a select client
         '''
         def inner(self, target: int, *args, **kwargs):
-            NetObj.serverQueue.put({'S': NetObj.serverId, 'C': target, 'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs})
+            NetObj.sendMethod(TARGET.CLIENT, {'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs}, target)
+            funct(self, target, *args, **kwargs)
+        return inner
+
+    @staticmethod
+    def gameServerRpc(funct):
+        '''Remote procedure call from game to server
+        '''
+        def inner(self, target: int, *args, **kwargs):
+            NetObj.sendMethod(TARGET.SERVER, {'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs})
             funct(self, target, *args, **kwargs)
         return inner
 
@@ -59,7 +71,7 @@ class NetObj:
         '''Make a netobject both here on the server and on the clients
         '''
         newNetObj = cls(*args, **kwargs)
-        NetObj.serverQueue.put({'S': NetObj.serverId, 'C': 0, 'D': newNetObj.id, 'P': '__init__', 'A': args, 'K': kwargs})
+        NetObj.sendMethod(TARGET.ALL_CLIENTS, {'D': newNetObj.id, 'P': '__init__', 'A': args, 'K': kwargs})
         return newNetObj
 
     def __init__(self, authority: typing.Optional[int] = None):
