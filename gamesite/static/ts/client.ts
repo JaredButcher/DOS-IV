@@ -1,6 +1,6 @@
+import { NetObj, Message } from "./netobj";
 
-
-class Client{
+export class Client{
     wsConn: WebSocket;
     password: string;
     address: string;
@@ -18,6 +18,7 @@ class Client{
         if(this.sid == undefined){
             console.error("gamesession cookie not set");
         }
+        NetObj.wsClient = this;
     }
 
     send(msg: Message): void{
@@ -25,43 +26,37 @@ class Client{
     }
 
     onopen(ev:Event): void {
-        this.send({F: 0, C: Channels.SERVER, SID: this.sid, PASSWORD: this.password})
+        this.wsConn.send(JSON.stringify({SID: this.sid, PASSWORD: this.password}))
     }
     onmessage(ev:MessageEvent): void {
+        let message = JSON.parse(ev.data) as Message;
+        if(message.D == 0){
+            switch(message.P){
+                case '__init__':
+                    
+            }
+        }else{
+            NetObj.handleServerRpc(message);
+        }
     }
     onerror(ev:Event): void {
     }
     onclose(ev:CloseEvent): void {
     }
+
+    handleServerRpc(message: Message){
+
+    }
+
+    constructNetObj(cls: string, ...args: any[]){
+        switch(cls){
+            case 'NetObj':
+                new NetObj(...<[number, number]>args);
+                break;
+        }
+    }
 }
 
-interface Message{
-    F: number;
-    C: Channels;
-    [key: string]: any;
-}
 
-interface RegisterMessage extends Message{
-    PASSWORD: string;
-    SID: string;
-}
 
-const enum Channels{
-    SERVER = 0,
-    LOBBY = 2,
-    GAME = 3,
-    CLIENT = 4,
-}
 
-const enum ServerForms{
-    REGISTER = 0,
-}
-
-const enum InClientForms{
-    SET_USERNAME = 0,
-}
-
-const enum OutClientForms{
-    USERNAME = 0,
-    LOBBY = 1,
-}

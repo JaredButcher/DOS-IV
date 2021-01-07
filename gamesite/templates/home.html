@@ -3,10 +3,6 @@
 {% block content %}
 
 <div class="subcontent">
-    <div id="usernamePrompt" hidden>
-        <label>Username:</label>
-        <input type="text" id="usernameInput"></input>
-    </div>
     <div id="serverJoinList">
         <h2>Server List</h2>
         <div class="joinList">
@@ -28,25 +24,11 @@
             {% endfor %}
         </div>
     </div>
-    <div id="serverJoinList" hidden>
-        <h2>Game List</h2>
-        <div id="serverJoinListEntries" class="joinList">
-        </div>
-    </div>
     <div id="joinEntry" hidden>
         <div id="joinName"></div>
         <label>Password:</label>
         <input type="text" id="joinPassword"></input>
         <input type="button" id="joinButton">Join</input>
-    </div>
-    <div id="createGame" hidden>
-        <label>Password:</label>
-        <input type="text" id="createGamePassword"></input>
-        <label>Game:</label>
-        <select id="createGameSelect">
-            <option value="debug">debug</option>
-        </select>
-        <input type="button" id="createGameButton">Create Game</input>
     </div>
 </div>
 

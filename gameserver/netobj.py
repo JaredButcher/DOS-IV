@@ -15,30 +15,28 @@ class NetObj:
             classRpcs = NetObj.clientRpcs.get(cls, {})
             classRpcs[funct.__name__] = funct
             NetObj.clientRpcs[cls] = classRpcs
-            def innerer(*args, **kwargs):
-                funct(*args, **kwargs)
-            return innerer
+            return funct
         return inner
 
     @staticmethod
     def gameAllRpc(funct):
         '''Remote procedure call from server to all clients
         '''
-        def inner(self, *args, **kwargs):
+        def inner(self, *args):
             for client in NetObj.clients.values():
-                client.send({'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs})
-            funct(self, *args, **kwargs)
+                client.send({'D': self.id, 'P': funct.__name__, 'A': args})
+            funct(self, *args)
         return inner
 
     @staticmethod
     def gameSelectRpc(funct):
         '''Remote procedure call from server to a select client
         '''
-        def inner(self, target: int, *args, **kwargs):
+        def inner(self, target: int, *args):
             client = NetObj.clients.get(target, None)
             if client:
-                client.send({'D': self.id, 'P': funct.__name__, 'A': args, 'K': kwargs})
-            funct(self, target, *args, **kwargs)
+                client.send({'D': self.id, 'P': funct.__name__, 'A': args})
+            funct(self, target, *args)
         return inner
 
     @staticmethod
@@ -47,7 +45,7 @@ class NetObj:
         if netObj and (netObj.authority is None or netObj.authority == message['S']):
             rpc = NetObj.clientRpcs.get(netObj.type, {}).get(message['P'], None)
             if rpc:
-                rpc(netObj, *(message['A']), **(message['K']))
+                rpc(netObj, *(message['A']))
 
     @staticmethod
     def sendAllState(clientId: int):
@@ -66,13 +64,13 @@ class NetObj:
         for client in NetObj.clients.values():
                 client.send(serialObj)
 
-    def __del__(self):
+    def destroy(self):
         NetObj.netObjs.pop(self.id, None)
         for client in NetObj.clients.values():
             client.send({'D': self.id, 'P': '__del__', 'A': [], 'K': {}})
 
     def serialize(self):
-        return {'D': 0, 'P': '__init__', 'A': [self.type, self.id], 'K': {'authority': self.authority}}
+        return {'D': 0, 'P': '__init__', 'A': [self.type, self.id, self.authority]}
 
     @property
     def id(self):
