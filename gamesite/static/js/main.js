@@ -1,28 +1,21 @@
-"use strict";
-class Client {
-    constructor(address, password = '') {
-        this.wsConn = new WebSocket(address);
-        this.password = password;
-        this.address = address;
-        this.wsConn.onopen = this.onopen;
-        this.wsConn.onmessage = this.onmessage;
-        this.wsConn.onerror = this.onerror;
-        this.wsConn.onclose = this.onclose;
-        this.sid = document.cookie.split("; ").find(entry => entry.startsWith('gamesession'))?.split('=')[1];
-        if (this.sid == undefined) {
-            console.error("gamesession cookie not set");
-        }
-    }
-    send(msg) {
-        this.wsConn.send(JSON.stringify(msg));
-    }
-    onopen(ev) {
-        this.send({ F: 0, C: 0 /* SERVER */, SID: this.sid, PASSWORD: this.password });
-    }
-    onmessage(ev) {
-    }
-    onerror(ev) {
-    }
-    onclose(ev) {
-    }
+import { Client } from './client.js';
+var joinAddr;
+var wsClient;
+function switchScreen(screenId) {
+    Array.from(document.getElementsByClassName("screen")).forEach((screen) => {
+        screen.hidden = true;
+    });
+    document.getElementById(screenId).hidden = false;
 }
+window.promptJoin = (id, address) => {
+    joinAddr = address;
+    document.getElementById("joinEntry").hidden = false;
+    document.getElementById("joinPassword").value = '';
+    Array.from(document.getElementsByClassName("serverEntry")).forEach((server) => {
+        server.style.backgroundColor = "";
+    });
+    document.getElementById("server" + id).style.backgroundColor = "#001020";
+};
+window.tryJoin = () => {
+    wsClient = new Client(joinAddr, document.getElementById("joinPassword").value);
+};

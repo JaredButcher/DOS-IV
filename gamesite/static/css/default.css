@@ -64,4 +64,7 @@ h3{
 .joinList > div:hover{
     background-color: #00254d;
 }
+.joinList > div:first-child:hover{
+    background-color: inherit;
+}
 

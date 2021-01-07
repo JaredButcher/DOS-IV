@@ -1,8 +1,11 @@
 {% extends "layout.html" %}
 {% block title %}gamesite{% endblock %}
-{% block content %}
+{% block navbar %}
 
-<div class="subcontent">
+{% endblock %}
+
+{% block content %}
+<div id="serverJoinScreen" class="screen">
     <div id="serverJoinList">
         <h2>Server List</h2>
         <div class="joinList">
@@ -14,7 +17,7 @@
                     <div>Password</div>
                 </div>
             {%for server in servers%}
-                <div>
+                <div class="serverEntry" id="server{{server.id}}" onclick="promptJoin({{server.id}}, 'ws://{{server.address}}:{{server.port}}');">
                     <div>{{server.name}}</div>
                     <div>{{server.address}}:{{server.port}}</div>
                     <div>{{server.game}}</div>
@@ -25,11 +28,16 @@
         </div>
     </div>
     <div id="joinEntry" hidden>
-        <div id="joinName"></div>
         <label>Password:</label>
         <input type="text" id="joinPassword"></input>
-        <input type="button" id="joinButton">Join</input>
+        <input type="button" id="joinButton" onclick="tryJoin();" value="Join"></input>
     </div>
 </div>
+<div id="lobbyScreen" class="screen" hidden>
 
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="static/js/main.js" type="module"></script>
 {% endblock %}
