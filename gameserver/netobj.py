@@ -1,6 +1,5 @@
 import typing
 
-
 class NetObj:
     idCounter = 1
     netObjs = {}
