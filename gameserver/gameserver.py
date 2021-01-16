@@ -29,7 +29,7 @@ class GameServer(multiprocessing.Process):
         self.closeEvent = multiprocessing.Event()
         self.isChildProcess = False
         self._port = port
-        self._sessions = {}
+        self._clients = {}
         self._game = None
         self._wsServer = None
         self.start()
@@ -38,6 +38,8 @@ class GameServer(multiprocessing.Process):
         initLogging(self.logLevel, self.logFile)
         logger.log(30, "Gameserver starting")
         self.isChildProcess = True
+        self._game = GameBase(self._clients)
+        NetObj.clients = self._clients
         self.eventLoop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.eventLoop)
         self.eventLoop.create_task(self.registerServer())
@@ -53,20 +55,6 @@ class GameServer(multiprocessing.Process):
     def port(self):
         return self._port
 
-    @property
-    def playerCount(self):
-        if self._game:
-            return self._game.playerCount
-        else:
-            return len([player for player in self._sessions.values() if player.connected])
-
-    @property
-    def maxPlayers(self):
-        if self._game:
-            return self._game.maxPlayers
-        else:
-            return 1
-
     def handleMessage(self, source: int, message: dict):
         pass
 
@@ -75,7 +63,7 @@ class GameServer(multiprocessing.Process):
         while self.running:
             if self.id is None:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/register', json = 
-                {'name': self.name, 'port': self.port, 'maxPlayers': self.maxPlayers, 'password': self.password != '', 'currentPlayers': self.playerCount, 'game': self._game.gameName if self._game else 'None'}, timeout=.3))
+                {'name': self.name, 'port': self.port, 'maxPlayers': self._game.maxPlayers, 'password': self.password != '', 'currentPlayers': self._game.playerCount, 'game': self._game.gameName if self._game else 'None'}, timeout=.3))
                 try:
                     res = await req
                     if res.status_code == 201:
@@ -85,7 +73,7 @@ class GameServer(multiprocessing.Process):
                     logger.log(40, "Failed to connect to server for registration")
             else:
                 req = self.eventLoop.run_in_executor(None, functools.partial(requests.post, f'{self.serverAddress}/server/{self.id}/update', json = 
-                {'currentPlayers': self.playerCount, 'maxPlayers': self.maxPlayers, 'game': self._game.gameName if self._game else 'None'}, timeout=.3))
+                {'currentPlayers': self._game.playerCount, 'maxPlayers': self._game.maxPlayers, 'game': self._game.gameName if self._game else 'None'}, timeout=.3))
                 try:
                     res = await req
                     if res.status_code != 200:
@@ -103,7 +91,7 @@ class GameServer(multiprocessing.Process):
             self.running = False
             if self._wsServer: self._wsServer.close()
             if self._game: self._game.close()
-            for client in self._sessions.values():
+            for client in self._clients.values():
                 client.close()
         else:
             self.closeEvent.set()
@@ -117,18 +105,16 @@ class GameServer(multiprocessing.Process):
             message = json.loads(await conn.recv())
         except (websockets.ConnectionClosedError, json.JSONDecodeError):
             return
-        if not self.running and message and self.playerCount < self.maxPlayers: return
         try:
-            if message['SID'] in self._sessions.keys():
-                self._sessions[message['SID']].setConn(conn)
+            if message['SID'] in self._clients.keys():
+                self._clients[message['SID']].setConn(conn)
+                self._game.playerConnected(self._clients[message['SID']])
             elif message['PASSWORD'] == self.password:
-                self._sessions[message['SID']] = GameClient(message['SID'])
-                self._sessions[message['SID']].setConn(conn)
+                self._clients[message['SID']] = GameClient(message['SID'])
+                self._clients[message['SID']].setConn(conn)
+                self._game.newPlayer(self._clients[message['SID']])
             else:
                 return
         except KeyError:
+            logger.log(30, f'New Connection KeyError')
             return
-        if self._game:
-            if not self._game.tryAddPlayer(self._sessions[message['SID']]):
-                self._sessions[message['SID']].close()
-

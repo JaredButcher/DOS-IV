@@ -4,14 +4,18 @@ export class NetObj{
     static serverRpcs: {[key: string]: {[key: string]: (...args: any[]) => any}} = {};
     static wsClient: {send: (message: Message) => void};
 
-    id: number;
-    authority: number;
+    id: number = 0;
+    authority: number = 0;
     type: string;
 
-    constructor(id: number, authority: number){
-        this.id = id;
-        this.authority = authority;
-        this.type = Object.getPrototypeOf(this).constructor.name
+    constructor(kwargs: Object){
+        this.type = Object.getPrototypeOf(this).constructor.name;
+        Object.assign(this, kwargs);
+        NetObj.netObjs[this.id] = this
+    }
+
+    destory(){
+        delete NetObj.netObjs[this.id];
     }
 
     static serverRpc(cls: string, funct: (...args: any[]) => any): (...args: any[]) => any{

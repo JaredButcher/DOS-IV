@@ -1,9 +1,14 @@
 let NetObj = /** @class */ (() => {
     class NetObj {
-        constructor(id, authority) {
-            this.id = id;
-            this.authority = authority;
+        constructor(kwargs) {
+            this.id = 0;
+            this.authority = 0;
             this.type = Object.getPrototypeOf(this).constructor.name;
+            Object.assign(this, kwargs);
+            NetObj.netObjs[this.id] = this;
+        }
+        destory() {
+            delete NetObj.netObjs[this.id];
         }
         static serverRpc(cls, funct) {
             if (!NetObj.serverRpcs[cls]) {

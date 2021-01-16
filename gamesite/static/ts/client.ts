@@ -1,10 +1,12 @@
 import { NetObj, Message } from "./netobj.js";
+import { GameBase } from "./gamebase.js";
 
 export class Client{
     wsConn: WebSocket;
     password: string;
     address: string;
     sid: string;
+    id: number;
     open: boolean;
 
     constructor(address: string, password: string = ''){
@@ -12,6 +14,7 @@ export class Client{
         this.password = password;
         this.address = address;
         this.open = false;
+        this.id = 0;
         this.wsConn.onopen = this.onopen.bind(this)
         this.wsConn.onmessage = this.onmessage.bind(this)
         this.wsConn.onerror = this.onerror.bind(this)
@@ -34,11 +37,18 @@ export class Client{
         console.log("Handshake");
     }
     onmessage(ev:MessageEvent): void {
+        console.log("RECV");
         let message = JSON.parse(ev.data) as Message;
+        console.log(ev.data);
         if(message.D == 0){
             switch(message.P){
                 case '__init__':
-                    
+                    this.constructNetObj(...<[string, Object]>(message.A));
+                    break;
+                case 'connected':
+                    this.id = message.A[0];
+                    console.log(this.id);
+                    break;
             }
         }else{
             NetObj.handleServerRpc(message);
@@ -50,14 +60,17 @@ export class Client{
         this.open = false;
     }
 
-    handleServerRpc(message: Message){
-
+    disconnect(): void{
+        this.wsConn.close();
     }
 
-    constructNetObj(cls: string, ...args: any[]){
+    constructNetObj(cls: string, kwargs: Object){
         switch(cls){
             case 'NetObj':
-                new NetObj(...<[number, number]>args);
+                new NetObj(kwargs);
+                break;
+            case 'GameBase':
+                new GameBase(kwargs);
                 break;
         }
     }

@@ -69,8 +69,8 @@ class NetObj:
         for client in NetObj.clients.values():
             client.send({'D': self.id, 'P': '__del__', 'A': [], 'K': {}})
 
-    def serialize(self):
-        return {'D': 0, 'P': '__init__', 'A': [self.type, self.id, self.authority]}
+    def serialize(self) -> dict:
+        return {'D': 0, 'P': '__init__', 'A': [self.type, {'id': self.id, 'authority': self.authority}]}
 
     @property
     def id(self):

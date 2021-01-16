@@ -2,24 +2,52 @@ from gameserver.gameclient import GameClient
 from gameserver.netobj import NetObj
 import time
 import asyncio
+import typing
 
 class GameBase(NetObj):
-    def __init__(self, owner: 'GameClient'):
-        super().__init__()
+    def __init__(self, clients: typing.Dict[int, 'GameClient']):
         self.gameName = "None"
-        self.owner = owner
         self.maxPlayers = 1
         self.tickrate = 20
         self.running = False
-        self._players = {}
-
-        NetObj.clients = self._players
-        self.tryAddPlayer(self.owner)
+        self.clients = clients
+        super().__init__()
 
     @property
-    def playerCount(self):
-        return len(self.players)
+    def activePlayerCount(self):
+        return len(self.activePlayers)
 
+    @property
+    def connectedPlayerCount(self):
+        return len(self.connectedPlayers)
+
+    @property
+    def connectedPlayers(self):
+        return {key:value for (key,value) in self.clients.items() if value.connected}
+
+    @property
+    def activePlayers(self):
+        return {key:value for (key,value) in self.clients.items() if value.get('active', False)}
+
+    def resetPlayerData(self):
+        '''Removes all dictionary values of the clients except for owner status
+        '''
+        for client in self.clients.values():
+            if client.get('owner', False):
+                client.data = {'owner': True}
+            else:
+                client.data = {}
+    
+    def removePlayerAttr(self, key: str):
+        for client in self.clients.values():
+            client.pop(key, None)
+
+    @NetObj.gameAllRpc
+    def setOwner(self, clientId: int):
+        self.removePlayerAttr('owner')
+        self.clients.get(clientId, {})['owner'] = True
+
+    @NetObj.gameAllRpc
     def startGame(self):
         self.running = True
         asyncio.get_event_loop().create_task(self.startGameLoop())
@@ -38,24 +66,30 @@ class GameBase(NetObj):
 
     def close(self):
         self.running = False
-        NetObj.clients = {}
-        for player in self._players.values():
-            player.send({'D': 0, 'P': 'gameclose', 'A': [], 'K': {}})
+        for player in self.connectedPlayers.values():
+            player.send({'D': 0, 'P': 'gameclose', 'A': []})
 
-    def tryAddPlayer(self, client: 'GameClient') -> bool:
-        if len(self._players) < self.maxPlayers:
-            self._players[client.id] = client
-            self.playerConnected(client)
-            return True
-        return False
+    def newPlayer(self, client: 'GameClient'):
+        if self.maxPlayers >= self.connectedPlayerCount:
+            client['active'] = True
+            NetObj.sendAllState(client.id)
+            if self.connectedPlayerCount == 1:
+                self.setOwner(client.id)
+        else:
+            client.close()
 
     def removePlayer(self, client: 'GameClient'):
-        client.send({'D': 0, 'P': 'gameleave', 'A': [], 'K': {}})
-        self._players.pop(client.id, None)
+        client['active'] = False
+        client.send({'D': 0, 'P': 'gameleave', 'A': []})
 
     def playerConnected(self, client: 'GameClient'):
-        NetObj.sendAllState(client.id)
+        self.newPlayer(client)
 
     def playerDisconnected(self, client: 'GameClient'):
-        pass
+        self.removePlayer(client)
+
+    def serialize(self) -> dict:
+        superSerial = super().serialize()
+        superSerial['A'][1].update({'gameName': self.gameName, 'maxPlayers': self.maxPlayers, 'running': self.running, 'clients': {player.id:{} for player in self.activePlayers.values()}})
+        return superSerial
 
