@@ -1,4 +1,3 @@
-from websockets.exceptions import ConnectionClosedOK
 from gameserver.netobj import NetObj
 import asyncio
 import websockets
@@ -8,7 +7,7 @@ import collections
 
 logger = logging.getLogger('GameClient')
 
-class GameClient(collections.UserDict):
+class GameClient():
     clientCount = 1
 
     def __init__(self, sessionId):
@@ -20,6 +19,7 @@ class GameClient(collections.UserDict):
         self.onDisconnect = None
         GameClient.clientCount += 1
         self.username = f'Default {self.id}'
+        self.owner = False
 
     @property
     def id(self):
@@ -46,7 +46,6 @@ class GameClient(collections.UserDict):
     
     def send(self, message: dict):
         if self._conn:
-            logging.log(30, json.dumps(message))
             asyncio.create_task(self._conn.send(json.dumps(message)))
 
     async def recv(self):
@@ -65,7 +64,7 @@ class GameClient(collections.UserDict):
                     try:
                         NetObj.handleClientRpc(message)
                     except KeyError:
-                        await conn.send(json.dumps({'D': 0, 'P': 'disconnected', 'A': ['Malformed message'], 'K': {}}))
+                        await conn.send(json.dumps({'D': 0, 'P': 'disconnected', 'A': ['Malformed message']}))
                         self.close()
 
     def handleMessage(self, message: dict):

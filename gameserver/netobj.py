@@ -66,7 +66,7 @@ class NetObj:
     def destroy(self):
         NetObj.netObjs.pop(self.id, None)
         for client in NetObj.clients.values():
-            client.send({'D': self.id, 'P': '__del__', 'A': [], 'K': {}})
+            client.send({'D': self.id, 'P': '__del__', 'A': []})
 
     def serialize(self) -> dict:
         return {'D': 0, 'P': '__init__', 'A': [self.type, {'id': self.id, 'authority': self.authority}]}

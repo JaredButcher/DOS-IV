@@ -1,5 +1,6 @@
 import { NetObj, Message } from "./netobj.js";
 import { GameBase } from "./gamebase.js";
+import { Player } from "./player.js";
 
 export class Client{
     wsConn: WebSocket;
@@ -71,6 +72,9 @@ export class Client{
                 break;
             case 'GameBase':
                 new GameBase(kwargs);
+                break;
+            case 'Player':
+                new Player(kwargs);
                 break;
         }
     }

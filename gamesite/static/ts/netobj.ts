@@ -40,7 +40,11 @@ export class NetObj{
         if(netobj){
             let rpcs = NetObj.serverRpcs[netobj.type]
             if(rpcs && rpcs[message.P]){
-                rpcs[message.P].bind(netobj)(...message.A)
+                if(message.P == "__del__"){
+                    rpcs.destory();
+                }else{
+                    rpcs[message.P].bind(netobj)(...message.A)
+                }
             }
         }
     }
