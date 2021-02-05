@@ -44,7 +44,7 @@ def setGameSessionCookie(response):
 
 def run():
     servers = []
-    for i in range(3):
+    for i in range(1):
         servers.append(GameServer(4245 + i, 'http://localhost:5000', f'Default Server {i}'))
     try:
         app.run(debug=False)

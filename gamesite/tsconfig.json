@@ -10,6 +10,8 @@
         "allowUnreachableCode": false,
         "allowUnusedLabels": true,
         "baseUrl": "static/ts/",
-        "outDir": "static/js/"
+        "outDir": "static/js/",
+        "strictPropertyInitialization": false
+
     }
 }

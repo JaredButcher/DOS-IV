@@ -16,3 +16,8 @@ window.tryJoin = () => {
     }
     wsClient = new Client(joinAddr, document.getElementById("joinPassword").value);
 };
+window.leave = () => {
+    if (wsClient) {
+        wsClient.disconnect();
+    }
+};

@@ -7,13 +7,13 @@ import json
 import logging
 import multiprocessing
 from gameserver.logging import initLogging
-from gameserver.netobj import NetObj
 from gameserver.gameclient import GameClient
 from gameserver.gamebase import GameBase
+from gameserver.netobj import NetObj
 
 CLOSE_SLEEP = .5
 ROUTER_SLEEP = .01
-UPDATE_DELAY = 25
+UPDATE_DELAY = 15
 logger = logging.getLogger('GameServer')
 
 class GameServer(multiprocessing.Process):
@@ -34,12 +34,20 @@ class GameServer(multiprocessing.Process):
         self._wsServer = None
         self.start()
 
+    @property
+    def port(self):
+        return self._port
+
+    @property
+    def connectedClients(self):
+        return [client for client in self._clients.values() if client.connected]
+
     def run(self):
         initLogging(self.logLevel, self.logFile)
-        logger.log(30, "Gameserver starting")
+        logger.log(30, f'Gameserver {self.name} starting')
         self.isChildProcess = True
-        self._game = GameBase(self._clients)
-        NetObj.clients = self._clients
+        NetObj.send = self.send
+        self._game = GameBase()
         self.eventLoop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.eventLoop)
         self.eventLoop.create_task(self.registerServer())
@@ -50,13 +58,6 @@ class GameServer(multiprocessing.Process):
             pass
         finally:
             self.close()
-
-    @property
-    def port(self):
-        return self._port
-
-    def handleMessage(self, source: int, message: dict):
-        pass
 
     async def registerServer(self):
         logger.log(20, "Register loop starting")
@@ -96,6 +97,13 @@ class GameServer(multiprocessing.Process):
         else:
             self.closeEvent.set()
 
+    def onRecv(self, message: dict):
+        if message['D'] == 0:
+            pass
+        else:
+            des = NetObj.netObjs.get(message['D'], None)
+            if des: des.recvCommand(message)
+
     async def accept(self, conn, url):
         '''Called on incomming connections, waits for session id to be sent
         '''
@@ -118,3 +126,32 @@ class GameServer(multiprocessing.Process):
         except KeyError:
             logger.log(30, f'New Connection KeyError')
             return
+        self.updateClient(message['SID'])
+        await self._clients[message['SID']].recv()
+
+    def send(self, message: dict, clientId: typing.Optional[int] = None):
+        if clientId:
+            client = self._clients.get(clientId, None)
+            if client: client.send(message)
+        else:
+            for client in self.connectedClients:
+                client.send(message)
+
+    def updateClient(self, clientId: typing.Optional[int] = None):
+        messages = []
+        for netObj in NetObj.netObjs:
+            messages.append(netObj.serialize())
+        if clientId:
+            client = self._clients.get(clientId, None)
+            if client: client.send({'D': 0, 'P': 'update', 'A': [messages]})
+        else:
+            for client in self.connectedClients:
+                client.send({'D': 0, 'P': 'update', 'A': [messages]})
+
+    def clearClient(self, clientId: typing.Optional[int] = None):
+        if clientId:
+            client = self._clients.get(clientId, None)
+            if client: client.send({'D': 0, 'P': 'clear', 'A': []})
+        else:
+            for client in self.connectedClients:
+                client.send({'D': 0, 'P': 'clear', 'A': []})

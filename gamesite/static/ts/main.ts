@@ -20,4 +20,9 @@ var wsClient: Client;
     wsClient = new Client(joinAddr, (<HTMLInputElement>document.getElementById("joinPassword")).value);
 }
 
+(window as any).leave = () => {
+    if(wsClient){
+        wsClient.disconnect();
+    }
+}
 

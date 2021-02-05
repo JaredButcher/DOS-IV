@@ -1,5 +1,7 @@
 import { NetObj } from "./netobj.js";
 import { GameBase } from "./gamebase.js";
+import { Player } from "./player.js";
+import { switchScreen } from "./screenManagement.js";
 export class Client {
     constructor(address, password = '') {
         this.wsConn = new WebSocket(address);
@@ -19,12 +21,16 @@ export class Client {
         console.log("Connecting");
     }
     send(msg) {
-        this.wsConn.send(JSON.stringify(msg));
+        if (this.wsConn.readyState == WebSocket.OPEN) {
+            this.wsConn.send(JSON.stringify(msg));
+        }
+        else {
+            console.warn("Sending when socket isnt ready");
+        }
     }
     onopen(ev) {
         this.wsConn.send(JSON.stringify({ SID: this.sid, PASSWORD: this.password }));
         this.open = true;
-        console.log("Handshake");
     }
     onmessage(ev) {
         console.log("RECV");
@@ -37,7 +43,8 @@ export class Client {
                     break;
                 case 'connected':
                     this.id = message.A[0];
-                    console.log(this.id);
+                    NetObj.localPlayerId = message.A[0];
+                    switchScreen("lobbyScreen");
                     break;
             }
         }
@@ -46,11 +53,16 @@ export class Client {
         }
     }
     onerror(ev) {
+        console.log("ON ERROR");
     }
     onclose(ev) {
         this.open = false;
+        console.log("ON CLOSE");
+        console.log(ev.code);
+        switchScreen("serverJoinScreen");
     }
     disconnect() {
+        console.log("DISCONNECT");
         this.wsConn.close();
     }
     constructNetObj(cls, kwargs) {
@@ -60,6 +72,9 @@ export class Client {
                 break;
             case 'GameBase':
                 new GameBase(kwargs);
+                break;
+            case 'Player':
+                new Player(kwargs);
                 break;
         }
     }

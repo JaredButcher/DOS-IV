@@ -1,6 +1,7 @@
 import { NetObj, Message } from "./netobj.js";
 import { GameBase } from "./gamebase.js";
 import { Player } from "./player.js";
+import { switchScreen } from "./screenManagement.js";
 
 export class Client{
     wsConn: WebSocket;
@@ -29,13 +30,16 @@ export class Client{
     }
 
     send(msg: Message): void{
-        this.wsConn.send(JSON.stringify(msg))
+        if(this.wsConn.readyState == WebSocket.OPEN){
+            this.wsConn.send(JSON.stringify(msg))
+        }else{
+            console.warn("Sending when socket isnt ready")
+        }
     }
 
     onopen(ev:Event): void {
         this.wsConn.send(JSON.stringify({SID: this.sid, PASSWORD: this.password}))
         this.open = true;
-        console.log("Handshake");
     }
     onmessage(ev:MessageEvent): void {
         console.log("RECV");
@@ -48,7 +52,8 @@ export class Client{
                     break;
                 case 'connected':
                     this.id = message.A[0];
-                    console.log(this.id);
+                    NetObj.localPlayerId = message.A[0];
+                    switchScreen("lobbyScreen");
                     break;
             }
         }else{
@@ -56,12 +61,17 @@ export class Client{
         }
     }
     onerror(ev:Event): void {
+        console.log("ON ERROR")
     }
     onclose(ev:CloseEvent): void {
         this.open = false;
+        console.log("ON CLOSE")
+        console.log(ev.code)
+        switchScreen("serverJoinScreen");
     }
 
     disconnect(): void{
+        console.log("DISCONNECT")
         this.wsConn.close();
     }
 

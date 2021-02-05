@@ -1,24 +1,24 @@
-from gameserver.netobj import NetObj
 import asyncio
+import typing
 import websockets
 import json
 import logging
-import collections
+from gameserver.netobj import NetObj
 
 logger = logging.getLogger('GameClient')
 
-class GameClient():
+class GameClient:
+    '''Holds a user id, the connection to the client, and some data that is persistent between games. 
+    '''
     clientCount = 1
 
     def __init__(self, sessionId):
-        super().__init__()
-        self.conn = None
         self.sessionId = sessionId
         self._conn = None
-        self._id = GameClient.clientCount
         self.onDisconnect = None
+        self._id = GameClient.clientCount
         GameClient.clientCount += 1
-        self.username = f'Default {self.id}'
+        self.username = f'Username {self.id}'
         self.owner = False
 
     @property
@@ -40,7 +40,6 @@ class GameClient():
     def setConn(self, conn: 'websockets.WebSocketServerProtocol'):
         self.close()
         self._conn = conn
-        asyncio.create_task(self.recv())
         self.send({'D': 0, 'P': 'connected', 'A': [self.id]})
 
     
@@ -48,7 +47,7 @@ class GameClient():
         if self._conn:
             asyncio.create_task(self._conn.send(json.dumps(message)))
 
-    async def recv(self):
+    async def recv(self, onRecv: typing.Callable[[dict], None]):
         conn = self._conn
         while conn and conn.open:
             try:
@@ -57,15 +56,10 @@ class GameClient():
                 self.close()
                 return
             if message:
+                logging.log(30, message)
                 message['S'] = self.id
-                if message['D'] == 0:
-                    self.handleMessage(message)
-                else:
-                    try:
-                        NetObj.handleClientRpc(message)
-                    except KeyError:
-                        await conn.send(json.dumps({'D': 0, 'P': 'disconnected', 'A': ['Malformed message']}))
-                        self.close()
-
-    def handleMessage(self, message: dict):
-        pass
+                try:
+                    self.onRecv(message)
+                except KeyError:
+                    await conn.send(json.dumps({'D': 0, 'P': 'disconnected', 'A': ['Malformed message']}))
+                    self.close()
