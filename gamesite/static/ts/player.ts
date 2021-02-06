@@ -1,6 +1,8 @@
 import { GameBase } from "./gamebase.js";
 import {NetObj} from "./netobj.js"
 
+//TODO
+
 export class Player extends NetObj{
     username: string;
     id: number;
@@ -11,7 +13,6 @@ export class Player extends NetObj{
         NetObj.getObject(NetObj.gameId, (game) => {
             (<GameBase>game).updateLobbyPlayers();
         });
-        console.log(this)
         if(this.id == NetObj.localPlayerId){
             (<HTMLInputElement>document.getElementById("usernameInput")).oninput = (ev: Event) => {
                 this.setUsername((<HTMLInputElement>ev.target).value);

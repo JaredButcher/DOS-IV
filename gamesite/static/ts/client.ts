@@ -25,7 +25,7 @@ export class Client{
         if(this.sid == undefined){
             console.error("gamesession cookie not set");
         }
-        NetObj.wsClient = this;
+        NetObj.send = this.send;
         console.log("Connecting");
     }
 
@@ -42,22 +42,25 @@ export class Client{
         this.open = true;
     }
     onmessage(ev:MessageEvent): void {
-        console.log("RECV");
         let message = JSON.parse(ev.data) as Message;
-        console.log(ev.data);
         if(message.D == 0){
             switch(message.P){
                 case '__init__':
-                    this.constructNetObj(...<[string, Object]>(message.A));
+                    let newNetObj = this.constructNetObj(...<[string, Object]>(message.A));
+                    newNetObj.onReady();
+                    break;
+                case 'update':
+                    this.update(message);
                     break;
                 case 'connected':
                     this.id = message.A[0];
-                    NetObj.localPlayerId = message.A[0];
                     switchScreen("lobbyScreen");
                     break;
             }
         }else{
-            NetObj.handleServerRpc(message);
+            if(message.D in NetObj.netObjs){
+                NetObj.netObjs[message.D].handleServerRpc(message);
+            }
         }
     }
     onerror(ev:Event): void {
@@ -75,17 +78,25 @@ export class Client{
         this.wsConn.close();
     }
 
-    constructNetObj(cls: string, kwargs: Object){
+    update(message: Message){
+        NetObj.netObjs = {};
+        for(let netObj of message.A){
+            this.constructNetObj(...<[string, Object]>(netObj.A));
+        }
+        for(let netObjId in NetObj.netObjs){
+            NetObj.netObjs[netObjId].onReady();
+        }
+    }
+
+    constructNetObj(cls: string, kwargs: Object): NetObj{
         switch(cls){
-            case 'NetObj':
-                new NetObj(kwargs);
-                break;
             case 'GameBase':
-                new GameBase(kwargs);
-                break;
+                return new GameBase(kwargs);
             case 'Player':
-                new Player(kwargs);
-                break;
+                return new Player(kwargs);
+            default:
+                console.warn("NetObj class " + cls + " not found");
+                return new NetObj(kwargs);;
         }
     }
 }
