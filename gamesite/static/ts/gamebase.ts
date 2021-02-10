@@ -2,28 +2,31 @@ import { Player } from "./player.js";
 import {NetObj} from "./netobj.js"
 
 export class GameBase extends NetObj{
-    gameName: string = '';
-    maxPlayers: number = 1;
-    running: boolean = false;
-    players: number[] = [];
+    gameName: string;
+    maxPlayers: number;
+    running: boolean;
+    players: Player[];
 
     constructor(kwargs: Object){
         super(kwargs);
-        NetObj.gameId = this.id;
+    }
+
+    onLoad(){
+
     }
 
     updateLobbyPlayers(){
-        const entry = <HTMLElement>document.getElementById("lobbyPlayerList" + this.id);
-        entry.innerHTML = '';
-        for(const playerId of this.players){
-            NetObj.getObject(playerId, (player) => {
-                entry.innerHTML += `
+        if(!this.running){
+            const playerList = <HTMLElement>document.getElementById("lobbyPlayerList");
+            playerList.innerHTML = '';
+            for(const player of this.players){
+                playerList.innerHTML += `
                     <div class="lobbyPlayer" id="lobbyPlayer${player.id}">
-                        <div>${(<Player>player).username}</div>
-                        <div>${((<Player>player).owner) ? "Owner" : ""}</div>
+                        <div>${player.username}</div>
+                        <div>${(player.owner) ? "Owner" : ""}</div>
                     </div>
                 `;
-            });
+            }
         }
     }
 }

@@ -6,9 +6,9 @@ import logging
 class Player(NetObj):
     '''A NetObj adapter to the GameClient
     '''
-    def __init__(self, client: GameClient, parent: int):
+    def __init__(self, client: GameClient, **kwargs):
         self.client = client
-        super().__init__(parent=parent, authority=client.id)
+        super().__init__(authority=client.id, **kwargs)
 
     @property
     def clientId(self):
@@ -28,14 +28,15 @@ class Player(NetObj):
 
     def rpcSetUsername(self, username: str):
         self.client.username = username
-        self.rpcAll("updateUsername", username)
+        self.rpcAll("rpcSetUsername", username)
 
     def cmdSetUsername(self, username: str):
+        print("SET USERNAME CMD")
         self.rpcSetUsername(username)
 
     def rpcSetOwner(self, isOwner: bool):
         self.client.owner = isOwner
-        self.rpcAll("updateOwner", isOwner)
+        self.rpcAll("rpcSetOwner", isOwner)
 
     def cmdSetOwner(self, isOwner: bool):
         self.rpcSetOwner(isOwner)

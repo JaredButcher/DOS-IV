@@ -42,7 +42,6 @@ class GameClient:
         self._conn = conn
         self.send({'D': 0, 'P': 'connected', 'A': [self.id]})
 
-    
     def send(self, message: dict):
         if self._conn:
             asyncio.create_task(self._conn.send(json.dumps(message)))
@@ -59,7 +58,7 @@ class GameClient:
                 logging.log(30, message)
                 message['S'] = self.id
                 try:
-                    self.onRecv(message)
+                    onRecv(message, self.owner)
                 except KeyError:
                     await conn.send(json.dumps({'D': 0, 'P': 'disconnected', 'A': ['Malformed message']}))
                     self.close()

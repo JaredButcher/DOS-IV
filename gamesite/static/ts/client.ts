@@ -25,7 +25,7 @@ export class Client{
         if(this.sid == undefined){
             console.error("gamesession cookie not set");
         }
-        NetObj.send = this.send;
+        NetObj.send = this.send.bind(this);
         console.log("Connecting");
     }
 
@@ -47,13 +47,14 @@ export class Client{
             switch(message.P){
                 case '__init__':
                     let newNetObj = this.constructNetObj(...<[string, Object]>(message.A));
-                    newNetObj.onReady();
+                    newNetObj.onLoad();
                     break;
                 case 'update':
                     this.update(message);
                     break;
                 case 'connected':
                     this.id = message.A[0];
+                    NetObj.localClientId = message.A[0];
                     switchScreen("lobbyScreen");
                     break;
             }
@@ -80,11 +81,11 @@ export class Client{
 
     update(message: Message){
         NetObj.netObjs = {};
-        for(let netObj of message.A){
+        for(let netObj of message.A[0]){
             this.constructNetObj(...<[string, Object]>(netObj.A));
         }
         for(let netObjId in NetObj.netObjs){
-            NetObj.netObjs[netObjId].onReady();
+            NetObj.netObjs[netObjId].onLoad();
         }
     }
 

@@ -1,59 +1,52 @@
 import { GameBase } from "./gamebase.js";
-import {NetObj} from "./netobj.js"
+import { NetObj } from "./netobj.js"
 
-//TODO
 
 export class Player extends NetObj{
     username: string;
-    id: number;
     owner: boolean;
+    clientId: number;
+    isLocalPlayer: boolean = false;
+    game: GameBase | null = null;
 
     constructor(kwargs: Object){
         super(kwargs);
-        NetObj.getObject(NetObj.gameId, (game) => {
-            (<GameBase>game).updateLobbyPlayers();
-        });
-        if(this.id == NetObj.localPlayerId){
-            (<HTMLInputElement>document.getElementById("usernameInput")).oninput = (ev: Event) => {
-                this.setUsername((<HTMLInputElement>ev.target).value);
-                console.log((<HTMLInputElement>ev.target).value)
-                console.log("update")
+        this.isLocalPlayer = this.clientId == NetObj.localClientId;
+        if(this.isLocalPlayer){
+            (<HTMLInputElement>document.getElementById("usernameInput")).onchange = (ev) => {
+                this.cmdSetUsername((<HTMLInputElement>document.getElementById("usernameInput")).value);
             };
         }
     }
 
-    updateUsername = NetObj.serverRpc("Player", (username: string) => {
+    onLoad(){
+        super.onLoad();
+        this.game = NetObj.find('game') as GameBase;
+        this.game.players.push(this);
+        this.game.updateLobbyPlayers();
+    }
+
+    cmdSetUsername(username: string){
+        console.log(this)
+        this.command("cmdSetUsername", [username]);
+    }
+
+    rpcSetUsername(username: string){
+        console.log("SET USERNAME: " + username)
         this.username = username;
-        NetObj.getObject(NetObj.gameId, (game) => {
-            (<GameBase>game).updateLobbyPlayers();
-            if(NetObj.localPlayerId == this.id){
-                (<HTMLInputElement>document.getElementById("usernameInput")).value = this.username;
-            }
-            if(!(<GameBase>game).running){
-                
-            }
-        });
-    });
+        this.game?.updateLobbyPlayers()
+    }
 
-    setUsername = NetObj.clientRpc((username: string) => {});
+    rpcSetOwner(isOwner: boolean){
+        this.owner = isOwner;
+        this.game?.updateLobbyPlayers()
+    }
 
-    updateOwner = NetObj.serverRpc("Player", (owner: boolean) => {
-        this.owner = owner;
-        NetObj.getObject(NetObj.gameId, (game) => {
-            (<GameBase>game).updateLobbyPlayers();
-        });
-    });
-
-    setOwner = NetObj.clientRpc((owner: boolean) => {});
-
-    destory(){
-        NetObj.getObject(NetObj.gameId, (game) => {
-            const index = (<GameBase>game).players.indexOf(this.id);
-            if(index > -1){
-                (<GameBase>game).players.splice(index, 1);
-            }
-            (<GameBase>game).updateLobbyPlayers();
-        });
-        super.destory()
+    protected _destory(){
+        let loc = this.game?.players.indexOf(this);
+        if(loc){
+            this.game?.players.splice(loc, 1);
+        }
+        super._destory()
     }
 }

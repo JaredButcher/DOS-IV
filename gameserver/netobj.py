@@ -7,16 +7,15 @@ class NetObj:
     netIdCounter = 1
 
     @staticmethod
-    def find(name: str) -> typing.Union[NetObj, None]:
-        delimiter = name.find('/')
-        if delimiter:
-            objName = name[0:delimiter]
-            path = name[name.find('/') + 1:delimiter]
-            obj = NetObj.rootObjs.get(objName, None)
+    def find(name: str) -> typing.Union['NetObj', None]:
+        path = name.split('/')
+        obj = NetObj.rootObjs.get(path[0], None)
+        for entry in path[1:]:
             if obj:
-                return obj.findChild(path)
-        else:
-            return NetObj.rootObjs.get(name, None)
+                obj = obj.children.get(entry, None)
+            else:
+                return None
+        return obj
 
     @staticmethod
     def attachRootObj(obj: 'NetObj'):
@@ -31,12 +30,13 @@ class NetObj:
         NetObj.netIdCounter += 1
         NetObj.netObjs[self.id] = self
         self.parent = None
-        self.name = name if name else str(type(self)) + str(self.id)
+        self.type = type(self).__name__
+        self.name = name if name else self.type + str(self.id)
         self.children = {}
         self._cmds = {}
         for attrName in dir(self):
             attr = getattr(self, attrName)
-            if callable(attr) and attrName[0:2] == 'cmd':
+            if callable(attr) and attrName[0:3] == 'cmd':
                 self._cmds[attrName] = attr
 
     @property
@@ -44,28 +44,31 @@ class NetObj:
         return self._id
 
     def onStart(self):
+        '''Ran on game start, override
+        '''
         pass
 
-    def onUpdate(self):
+    def onUpdate(self, deltatime: float):
+        '''Ran on each clock cycle, override
+        '''
         pass
 
-    def findChild(self, name: str) -> typing.Union[NetObj, None]:
-        delimiter = name.find('/')
-        if delimiter:
-            objName = name[0:delimiter]
-            path = name[name.find('/') + 1:delimiter]
-            obj = self.children.get(objName, None)
+    def findChild(self, name: str) -> typing.Union['NetObj', None]:
+        path = name.split('/')
+        obj = self.children.get(path[0], None)
+        for entry in path[1:]:
             if obj:
-                return obj.findChild(path)
-        else:
-            return self.children.get(name, None)
+                obj = obj.children.get(entry, None)
+            else:
+                return None
+        return obj
 
     def attachChild(self, child: 'NetObj'):
         NetObj.rootObjs.pop(child.name, None)
-        if obj.parent:
-            obj.parent.children.pop(obj.name, None)
-        obj.parent = self
-        self.children[obj.name] = obj
+        if child.parent:
+            child.parent.children.pop(child.name, None)
+        child.parent = self
+        self.children[child.name] = child
 
     def rpcAll(self, procedure: str, *args):
         NetObj.send({'D': self.id, 'P': procedure, 'A': [*args]})
@@ -73,14 +76,17 @@ class NetObj:
     def rpcTarget(self, clientId: int, procedure: str, *args):
         NetObj.send({'D': self.id, 'P': procedure, 'A': [*args]}, clientId)
 
-    def recvCommand(self, commandMsg: dict):
-        if self.authority == commandMsg['S']:
+    def recvCommand(self, commandMsg: dict, isOwner: bool):
+        print(self.id)
+        if self.authority == commandMsg['S'] or self.authority is None and isOwner:
             cmd = self._cmds.get(commandMsg['P'], None)
+            print(cmd)
+            print(self._cmds)
             if cmd: cmd(*commandMsg['A'])
 
     def serialize(self, **kwargs) -> dict:
         return {'D': 0, 'P': '__init__', 'A': [self.type, 
-            {'id': self.id, 'name': self.name, 'parent': self.parent.id, 'authority': self.authority, 
+            {'id': self.id, 'name': self.name, 'parent': self.parent.id if self.parent else None, 'authority': self.authority, 
             'children': [child.id for child in self.children], **kwargs}]}
 
     def destroy(self):
@@ -93,8 +99,7 @@ class NetObj:
 
     def _destory(self):
         NetObj.netObjs.pop(self.id, None)
-        objectsToRemove = []
         for child in self.children.values():
-            child._delete()
+            child._destory()
         self.children = None
         

@@ -97,12 +97,12 @@ class GameServer(multiprocessing.Process):
         else:
             self.closeEvent.set()
 
-    def onRecv(self, message: dict):
+    def onRecv(self, message: dict, isOwner: bool):
         if message['D'] == 0:
             pass
         else:
             des = NetObj.netObjs.get(message['D'], None)
-            if des: des.recvCommand(message)
+            if des: des.recvCommand(message, isOwner)
 
     async def accept(self, conn, url):
         '''Called on incomming connections, waits for session id to be sent
@@ -126,8 +126,8 @@ class GameServer(multiprocessing.Process):
         except KeyError:
             logger.log(30, f'New Connection KeyError')
             return
-        self.updateClient(message['SID'])
-        await self._clients[message['SID']].recv()
+        self.updateClient(self._clients[message['SID']])
+        await self._clients[message['SID']].recv(self.onRecv)
 
     def send(self, message: dict, clientId: typing.Optional[int] = None):
         if clientId:
@@ -137,16 +137,11 @@ class GameServer(multiprocessing.Process):
             for client in self.connectedClients:
                 client.send(message)
 
-    def updateClient(self, clientId: typing.Optional[int] = None):
+    def updateClient(self, client: 'GameClient'):
         messages = []
-        for netObj in NetObj.netObjs:
+        for netObj in NetObj.netObjs.values():
             messages.append(netObj.serialize())
-        if clientId:
-            client = self._clients.get(clientId, None)
-            if client: client.send({'D': 0, 'P': 'update', 'A': [messages]})
-        else:
-            for client in self.connectedClients:
-                client.send({'D': 0, 'P': 'update', 'A': [messages]})
+        client.send({'D': 0, 'P': 'update', 'A': [messages]})
 
     def clearClient(self, clientId: typing.Optional[int] = None):
         if clientId:

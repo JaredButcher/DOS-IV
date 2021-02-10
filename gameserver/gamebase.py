@@ -8,7 +8,6 @@ import typing
 
 class GameBase(NetObj):
     def __init__(self, prevGame: typing.Optional['GameBase'] = None):
-        super().__init__(0, 0)
         self.gameName = prevGame.gameName if prevGame else "None"
         self.maxPlayers = prevGame.maxPlayers if prevGame else 1
         self.owner = None
@@ -19,6 +18,7 @@ class GameBase(NetObj):
             self.newPlayer(prevGame.owner.client)
             for player in prevGame.players:
                 self.newPlayer(player.client)
+        super().__init__('game', 0)
 
     @property
     def playerCount(self):
@@ -33,12 +33,16 @@ class GameBase(NetObj):
         return [player for player in self.players.values() if player.client.connected]
 
     def setOwner(self, newOwner: 'Player'):
-        self.rpcAll("setOwner", newOwner.id)
+        if self.owner:
+            self.owner.cmdSetOwner(False)
+        newOwner.cmdSetOwner(True)
         self.owner = newOwner
 
-    def startGame(self):
+    def rpcStartGame(self):
         self.running = True
-        self.rpcAll("startGame")
+        self.rpcAll("rpcStartGame")
+        for obj in NetObj.netObjs:
+            obj.onStart()
         asyncio.get_event_loop().create_task(self._startGameLoop())
 
     async def _startGameLoop(self):
@@ -60,8 +64,8 @@ class GameBase(NetObj):
     def newPlayer(self, client: 'GameClient'):
         if client not in [player.client for player in self.players.values()]:
             if self.maxPlayers >= self.connectedPlayerCount:
-                logging.log(30, "New Player " + str(self.connectedPlayerCount))
-                self.players[client.id] = Player(client, self)
+                logging.log(30, "New Player " + str(self.connectedPlayerCount) + " " + str(client.id))
+                self.players[client.id] = Player(client)
                 client.onDisconnect = self.playerDisconnected
                 if self.connectedPlayerCount == 1:
                     self.setOwner(self.players[client.id])
@@ -69,9 +73,10 @@ class GameBase(NetObj):
                 client.close()
 
     def removePlayer(self, client: 'GameClient'):
-        self.players.pop(client.id, None)
+        player = self.players.pop(client.id, None)
+        if player:
+            player.destroy()
         self.rpcTarget(client, "__close__", "Player Removed")
-        self.rpcTarget()
 
     def playerConnected(self, client: 'GameClient'):
         self.newPlayer(client)
