@@ -1,4 +1,5 @@
 import { Client } from './client.js';
+import { switchScreen } from "./screenManagement.js";
 var joinAddr;
 var wsClient;
 window.promptJoin = (id, address) => {
@@ -21,3 +22,6 @@ window.leave = () => {
         wsClient.disconnect();
     }
 };
+window.addEventListener("load", (ev) => {
+    switchScreen("serverJoinScreen");
+});

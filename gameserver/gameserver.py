@@ -6,6 +6,7 @@ import functools
 import json
 import logging
 import multiprocessing
+import warnings
 from gameserver.logging import initLogging
 from gameserver.gameclient import GameClient
 from gameserver.gamebase import GameBase
@@ -52,12 +53,13 @@ class GameServer(multiprocessing.Process):
         asyncio.set_event_loop(self.eventLoop)
         self.eventLoop.create_task(self.registerServer())
         self._wsServer = self.eventLoop.run_until_complete(websockets.serve(self.accept, host='', port=self.port))
-        try:
-            self.eventLoop.run_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.close()
+        with warnings.catch_warnings(record=True):
+            try:
+                self.eventLoop.run_forever()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                self.close()
 
     async def registerServer(self):
         logger.log(20, "Register loop starting")

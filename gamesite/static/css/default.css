@@ -36,6 +36,41 @@ h3{
     background-color: #cbd0e7;
     flex-grow: 1;
 }
+#lobbyScreen{
+    display: flex;
+    flex-flow: column wrap;
+    justify-content: flex-start;
+    align-items: stretch;
+    font-size: 16px;
+    font-family: sans-serif;
+    text-align: left;
+    color: white;
+    padding: 30px;
+    max-height: 1000px;
+}
+#lobbyScreen > div{
+    border-radius: 5px;
+    background-color: #003976;
+    margin: 2px;
+    padding: 3px;
+    padding-left: 6px;
+    width: 500px;
+}
+#lobbyBasePlayerSettings{
+    order: 1;
+}
+#lobbyPlayerList{
+    order: 2;
+}
+#lobbyGameSettings{
+    order: 5;   
+}
+#lobbyPlayerSettings{
+    order: 3;
+}
+#lobbyServerSettings{
+    order: 4;
+}
 .joinList{
     background-color:  #003976;
     color: white;
