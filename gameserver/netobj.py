@@ -1,35 +1,24 @@
 import typing
+import logging
+
+logger = logging.getLogger('NetObj')
 
 class NetObj:
     netObjs = {}
-    rootObjs = {}
+    rootObj = None
     send = None
     netIdCounter = 1
 
     @staticmethod
     def find(name: str) -> typing.Union['NetObj', None]:
-        path = name.split('/')
-        obj = NetObj.rootObjs.get(path[0], None)
-        for entry in path[1:]:
-            if obj:
-                obj = obj.children.get(entry, None)
-            else:
-                return None
-        return obj
+        return NetObj.rootObj.findChild(name) if NetObj.rootObj else None
 
-    @staticmethod
-    def attachRootObj(obj: 'NetObj'):
-        if obj.parent:
-            obj.parent.children.pop(obj.name, None)
-        obj.parent = None
-        NetObj.rootObjs[obj.name] = obj
-
-    def __init__(self, name: str = '', authority: typing.Optional[int] = None):
+    def __init__(self, name: str = '', authority: typing.Optional[int] = None, parent: typing.Optional['NetObj'] = None):
         self.authority = authority
         self._id = NetObj.netIdCounter
         NetObj.netIdCounter += 1
         NetObj.netObjs[self.id] = self
-        self.parent = None
+        self.parent = parent
         self.type = type(self).__name__
         self.name = name if name else self.type + str(self.id)
         self.children = {}
@@ -38,6 +27,16 @@ class NetObj:
             attr = getattr(self, attrName)
             if callable(attr) and attrName[0:3] == 'cmd':
                 self._cmds[attrName] = attr
+        if self.parent is None:
+            logger.log(30, "Setting Root Object")
+            if NetObj.rootObj:
+                NetObj.rootObj.destory()
+            NetObj.rootObj = self
+        else:
+            oldChild = parent.children.pop(self.name, None)
+            if oldChild:
+                oldChild.destory()
+            parent.children[self.name] = self
 
     @property
     def id(self):
@@ -86,14 +85,13 @@ class NetObj:
 
     def serialize(self, **kwargs) -> dict:
         return {'D': 0, 'P': '__init__', 'A': [self.type, 
-            {'id': self.id, 'name': self.name, 'parent': self.parent.id if self.parent else None, 'authority': self.authority, 
-            'children': [child.id for child in self.children], **kwargs}]}
+            {'id': self.id, 'name': self.name, 'parent': self.parent.id if self.parent else None, 'authority': self.authority, **kwargs}]}
 
     def destroy(self):
         if self.parent:
            self.parent.children.pop(self.name, None)
         else:
-            NetObj.rootObjs.pop(self.name, None)
+            NetObj.rootObj = None
         self._destory() 
         self.rpcAll('__del__')
 

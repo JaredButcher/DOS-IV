@@ -14,40 +14,25 @@ let NetObj = /** @class */ (() => {
             }
             Object.assign(this, kwargs);
             NetObj.netObjs[this.id] = this;
-            if (!this.parent) {
-                NetObj.attachRootObj(this);
+            if (this.parent == null) {
+                if (NetObj.rootObj)
+                    NetObj.rootObj.destory();
+                NetObj.rootObj = this;
             }
         }
         static find(name) {
-            let path = name.split('/');
-            let obj = NetObj.rootObjs[path[0]];
-            if (obj == undefined)
-                return null;
-            path.shift();
-            for (let entry of path) {
-                obj = obj.children[entry];
-                if (obj == undefined)
-                    return null;
-            }
-            return obj;
+            return (NetObj.rootObj ? NetObj.rootObj.findChild(name) : null);
         }
-        static attachRootObj(obj) {
-            if (obj.parent) {
-                delete obj.parent.children[obj.name];
-            }
-            obj.parent = null;
-            NetObj.rootObjs[obj.name] = obj;
+        static clear() {
         }
         onLoad() {
-            //On load, override
+            //On load, override and call super
             if (this.parent) {
                 this.parent = NetObj.netObjs[this.parent];
+                if (this.name in this.parent.children)
+                    this.parent.children[this.name].destory();
+                this.parent.children[this.name] = this;
             }
-            let children = {};
-            Object.values(this.children).forEach((child) => {
-                child = NetObj.netObjs[child];
-                children[child.name] = child;
-            });
         }
         onStart() {
             //Ran on game start, override
@@ -64,13 +49,6 @@ let NetObj = /** @class */ (() => {
                     return null;
             }
             return obj;
-        }
-        attachChild(obj) {
-            if (obj.parent) {
-                delete obj.parent.children[obj.name];
-            }
-            obj.parent = this;
-            this.children[obj.name] = obj;
         }
         command(procedure, args) {
             NetObj.send({ 'D': this.id, 'P': procedure, 'A': args });
@@ -94,7 +72,7 @@ let NetObj = /** @class */ (() => {
                 delete this.parent.children[this.name];
             }
             else {
-                delete NetObj.rootObjs[this.name];
+                NetObj.rootObj = null;
             }
             this._destory();
         }
@@ -107,12 +85,8 @@ let NetObj = /** @class */ (() => {
         }
     }
     NetObj.netObjs = {};
-    NetObj.rootObjs = {};
+    NetObj.rootObj = null;
     NetObj.localClientId = 0;
     return NetObj;
 })();
 export { NetObj };
-//TODO
-//Attach, find children
-//Override methods
-//Delete

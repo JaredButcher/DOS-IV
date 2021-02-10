@@ -31,6 +31,7 @@ export class Client {
     onopen(ev) {
         this.wsConn.send(JSON.stringify({ SID: this.sid, PASSWORD: this.password }));
         this.open = true;
+        document.getElementById("joinEntryError").innerText = "";
     }
     onmessage(ev) {
         let message = JSON.parse(ev.data);
@@ -46,7 +47,16 @@ export class Client {
                 case 'connected':
                     this.id = message.A[0];
                     NetObj.localClientId = message.A[0];
+                    if (NetObj.rootObj)
+                        NetObj.rootObj.destory();
+                    NetObj.netObjs = {};
                     switchScreen("lobbyScreen");
+                    break;
+                case '__close__':
+                    this.open = false;
+                    console.log("__CLOSE__");
+                    switchScreen("serverJoinScreen");
+                    document.getElementById("joinEntryError").innerText = message.A[0];
                     break;
             }
         }
@@ -61,8 +71,6 @@ export class Client {
     }
     onclose(ev) {
         this.open = false;
-        console.log("ON CLOSE");
-        console.log(ev.code);
         switchScreen("serverJoinScreen");
     }
     disconnect() {

@@ -29,10 +29,16 @@ class GameClient:
     def connected(self):
         return self._conn.open if self._conn else False
 
-    def close(self):
+    def close(self, message: typing.Optional[dict] = None):
+        '''Close the socket, can optionaly send a message before closeure
+        '''
         if self._conn:
-            logging.log(20, f'Lost connection to client {self._id}')
-            asyncio.create_task(self._conn.close())
+            logging.log(20, f'Connection closed to client {self._id}')
+            async def close(conn):
+                if message:
+                    await conn.send(json.dumps(message))
+                await conn.close()
+            asyncio.create_task(close(self._conn))
             self._conn = None
             if self.onDisconnect:
                 self.onDisconnect(self)

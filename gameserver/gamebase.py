@@ -63,14 +63,14 @@ class GameBase(NetObj):
 
     def newPlayer(self, client: 'GameClient'):
         if client not in [player.client for player in self.players.values()]:
-            if self.maxPlayers >= self.connectedPlayerCount:
-                logging.log(30, "New Player " + str(self.connectedPlayerCount) + " " + str(client.id))
-                self.players[client.id] = Player(client)
+            if self.maxPlayers > self.connectedPlayerCount:
+                logging.log(30, "New Player " + str(self.connectedPlayerCount) + " " + str(client.id) + " " + str(self.maxPlayers) + " " + str(self.connectedPlayerCount))
+                self.players[client.id] = Player(client, parent=self)
                 client.onDisconnect = self.playerDisconnected
                 if self.connectedPlayerCount == 1:
                     self.setOwner(self.players[client.id])
             else:
-                client.close()
+                client.close({'D': 0, 'P': '__close__', 'A':["Cannot Join, Max Players"]})
 
     def removePlayer(self, client: 'GameClient'):
         player = self.players.pop(client.id, None)
@@ -86,5 +86,5 @@ class GameBase(NetObj):
         self.removePlayer(client)
 
     def serialize(self, **kwargs) -> dict:
-        return super().serialize(gameName = self.gameName, maxPlayers = self.maxPlayers, running = self.running, players = [player.id for player in self.players.values()], **kwargs)
+        return super().serialize(gameName = self.gameName, maxPlayers = self.maxPlayers, running = self.running, **kwargs)
 

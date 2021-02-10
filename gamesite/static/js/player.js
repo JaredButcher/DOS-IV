@@ -13,7 +13,7 @@ export class Player extends NetObj {
     }
     onLoad() {
         super.onLoad();
-        this.game = NetObj.find('game');
+        this.game = NetObj.rootObj;
         this.game.players.push(this);
         this.game.updateLobbyPlayers();
     }

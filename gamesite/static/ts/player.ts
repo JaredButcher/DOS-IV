@@ -21,7 +21,7 @@ export class Player extends NetObj{
 
     onLoad(){
         super.onLoad();
-        this.game = NetObj.find('game') as GameBase;
+        this.game = NetObj.rootObj as GameBase;
         this.game.players.push(this);
         this.game.updateLobbyPlayers();
     }

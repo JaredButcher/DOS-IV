@@ -1,27 +1,15 @@
 export class NetObj{
     static netObjs: {[key: number]: NetObj} = {};
-    static rootObjs: {[key: string]: NetObj} = {};
+    static rootObj: NetObj | null = null;
     static send: (message: Message) => void;
     static localClientId: number = 0;
 
     static find(name: string): NetObj | null{
-        let path = name.split('/');
-        let obj: NetObj = NetObj.rootObjs[path[0]];
-        if(obj == undefined) return null;
-        path.shift();
-        for(let entry of path){
-            obj = obj.children[entry];
-            if(obj == undefined) return null;
-        }
-        return obj;
+        return (NetObj.rootObj ? NetObj.rootObj.findChild(name) : null);
     }
 
-    static attachRootObj(obj: NetObj){
-        if(obj.parent){
-            delete obj.parent.children[obj.name]
-        }
-        obj.parent = null;
-        NetObj.rootObjs[obj.name] = obj;
+    static clear(){
+
     }
 
     id: number = -1;
@@ -38,22 +26,20 @@ export class NetObj{
             }
         }
         Object.assign(this, kwargs);
-        NetObj.netObjs[this.id] = this
-        if(!this.parent){
-            NetObj.attachRootObj(this);
+        NetObj.netObjs[this.id] = this;
+        if(this.parent == null){
+            if(NetObj.rootObj) NetObj.rootObj.destory();
+            NetObj.rootObj = this;
         }
     }
 
     onLoad(){
-        //On load, override
+        //On load, override and call super
         if(this.parent){
             this.parent = NetObj.netObjs[<number><any>this.parent];
+            if(this.name in this.parent.children) this.parent.children[this.name].destory();
+            this.parent.children[this.name] = this;
         }
-        let children: {[key: string]: NetObj} = {};
-        Object.values(this.children).forEach((child) => {
-            child = NetObj.netObjs[<number><any>child];
-            children[child.name] = child;
-        });
     }
 
     onStart(){
@@ -75,14 +61,6 @@ export class NetObj{
         return obj;
     }
 
-    attachChild(obj: NetObj){
-        if(obj.parent){
-            delete obj.parent.children[obj.name]
-        }
-        obj.parent = this;
-        this.children[obj.name] = obj;
-    }
-
     command(procedure: string, args: any[]){
         NetObj.send({'D': this.id, 'P': procedure, 'A': args});
     }
@@ -100,11 +78,11 @@ export class NetObj{
         }
     }
 
-    destory(){ //TODO
+    destory(){
         if(this.parent){
             delete this.parent.children[this.name];
         }else{
-            delete NetObj.rootObjs[this.name];
+            NetObj.rootObj = null;
         }
         this._destory();
     }
@@ -123,8 +101,3 @@ export interface Message{
     P: string;
     A: any[];
 }
-
-//TODO
-//Attach, find children
-//Override methods
-//Delete
